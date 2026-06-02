@@ -129,6 +129,19 @@
                             <p class="text-[9px] text-slate-400 font-bold mt-3 tracking-wider uppercase">Scan via Mobile Pasien</p>
                         </div>
                         
+                        <!-- Kode Teks Manual untuk Testing -->
+                        <div class="w-full mt-4 bg-slate-50 p-3 rounded-xl border border-slate-200 text-left">
+                            <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Kode Enkripsi Manual (Untuk Testing/Emulator):</label>
+                            <div class="flex gap-2">
+                                <input type="text" readonly id="manualQrString" value="{{ session('qr_string') }}" 
+                                    class="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-[10px] font-mono text-slate-600 focus:outline-none">
+                                <button type="button" onclick="copyManualCode()" 
+                                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-[10px] font-bold transition">
+                                    Salin
+                                </button>
+                            </div>
+                        </div>
+                        
                         <div class="w-full mt-6 pt-4 border-t border-slate-100">
                             <button type="button" onclick="downloadQRNative()" 
                                 class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-xl text-xs shadow-md shadow-emerald-100 flex items-center justify-center gap-2 transition duration-150 cursor-pointer">
@@ -216,6 +229,14 @@
 
             // Mengubah blob menjadi URL sumber gambar untuk di-render canvas
             image.src = URL.createObjectURL(svgBlob);
+        }
+
+        function copyManualCode() {
+            const copyText = document.getElementById("manualQrString");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            alert("Kode aturan berhasil disalin!");
         }
     </script>
 </body>
