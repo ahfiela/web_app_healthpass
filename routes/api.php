@@ -22,4 +22,5 @@ Route::middleware('auth:sanctum')->prefix('pasien')->group(function () {
     // Jalur Flutter untuk verifikasi QR Passport
     Route::post('/qr/verify-scan', [FlutterController::class, 'validatePassportQR']);
     Route::get('/profile', [FlutterController::class, 'getProfile']);
+    Route::post('/profile/update', [FlutterController::class, 'updateProfile']);
 });
