@@ -25,11 +25,11 @@ class DatabaseSeeder extends Seeder
 
         // 2. ISI DATA MASTER PENYAKIT (CONTOH ICD-10)
         $diseases = [
-            ['icd_code' => 'A15', 'name' => 'Respiratory tuberculosis (TBC)'],
-            ['icd_code' => 'I21', 'name' => 'Acute myocardial infarction (Jantung Koroner)'],
-            ['icd_code' => 'E11', 'name' => 'Type 2 diabetes mellitus (Kencing Manis)'],
-            ['icd_code' => 'I10', 'name' => 'Essential (primary) hypertension (Darah Tinggi)'],
-            ['icd_code' => 'B20', 'name' => 'Human immunodeficiency virus (HIV) disease'],
+            ['icd_code' => 'A15', 'name' => 'Respiratory tuberculosis (TBC)', 'is_critical' => 1],
+            ['icd_code' => 'I21', 'name' => 'Acute myocardial infarction (Jantung Koroner)', 'is_critical' => 1],
+            ['icd_code' => 'E11', 'name' => 'Type 2 diabetes mellitus (Kencing Manis)', 'is_critical' => 0],
+            ['icd_code' => 'I10', 'name' => 'Essential (primary) hypertension (Darah Tinggi)', 'is_critical' => 0],
+            ['icd_code' => 'B20', 'name' => 'Human immunodeficiency virus (HIV) disease', 'is_critical' => 1],
         ];
 
         foreach ($diseases as $item) {
