@@ -17,4 +17,9 @@ class Visit extends Model
         'visit_date',
         'status'
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class, 'no_bpjs', 'no_bpjs');
+    }
 }

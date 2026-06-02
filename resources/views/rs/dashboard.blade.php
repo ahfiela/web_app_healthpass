@@ -13,7 +13,7 @@
             .then(data => this.stats = data || {});
             
         // Ambil Data Pasien Hari Ini
-        fetch('/api/rs/visits/pending')
+        fetch('/api/rs/visits/today')
             .then(res => res.json())
             .then(data => {
                 this.todayPatients = Array.isArray(data) ? data : (data.data || []);
@@ -78,7 +78,7 @@
                             <tr class="hover:bg-gray-50/50 transition">
                                 <td class="p-3 font-mono font-bold text-blue-600" x-text="'#' + (p.id || p.id_visit || '-')"></td>
                                 <td class="p-3 font-mono" x-text="p.no_bpjs || '-'"></td>
-                                <td class="p-3 font-semibold text-gray-900" x-text="p.user?.name || p.patient_name || 'Pasien Umum'"></td>
+                                <td class="p-3 font-semibold text-gray-900" x-text="p.user?.username || p.patient_name || 'Pasien Umum'"></td>
                                 <td class="p-3">
                                     <span class="px-2 py-0.5 rounded text-[11px] font-bold uppercase"
                                           :class="(p.status === 'completed' || p.status === 'approved') ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'"

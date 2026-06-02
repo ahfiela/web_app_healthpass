@@ -16,6 +16,10 @@ class RsWebController extends Controller
         return auth()->guard('hospital')->user()->kode_rs; 
     }
 
+    private function getNamaRs() { 
+        return auth()->guard('hospital')->user()->nama_rs; 
+    }
+
     // ==========================================
     // 1. MASTER DATA CRUD: DOKTER
     // ==========================================
@@ -181,15 +185,25 @@ class RsWebController extends Controller
     // 6. OPERASIONAL MEDIS & SINKRONISASI JADWAL
     // ==========================================
     public function getPendingVisits() {
-    // 🟢 FIX: Hilangkan 'completed' agar pasien yang sudah ditangani hilang dari daftar antrean hari ini
-    return response()->json(
-        Visit::where('kode_rs', $this->getKodeRs())
-            ->whereIn('status', ['pending', 'approved']) 
-            ->whereDate('visit_date', \Carbon\Carbon::today())
-            ->orderBy('status', 'asc')
-            ->get()
-    );
-}
+        return response()->json(
+            Visit::with('user')
+                ->where('kode_rs', $this->getKodeRs())
+                ->whereIn('status', ['pending', 'approved']) 
+                ->whereDate('visit_date', \Carbon\Carbon::today())
+                ->orderBy('status', 'asc')
+                ->get()
+        );
+    }
+
+    public function getTodayVisits() {
+        return response()->json(
+            Visit::with('user')
+                ->where('kode_rs', $this->getKodeRs())
+                ->whereDate('visit_date', \Carbon\Carbon::today())
+                ->orderBy('status', 'asc')
+                ->get()
+        );
+    }
 
     public function validateVisit(Request $request, $id) {
         $request->validate(['status' => 'required|in:approved,rejected']);
@@ -257,7 +271,6 @@ class RsWebController extends Controller
                         // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments
                         Appointment::create([
                             'no_bpjs'          => $request->no_bpjs,
-                            'kode_rs'          => $this->getKodeRs(), // 🟢 Mengisi kode_rs
                             'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
                             'appointment_date' => $apt['appointment_date'],
                             'notes'            => $apt['notes'] ?? 'Kontrol Medis',
@@ -288,7 +301,6 @@ class RsWebController extends Controller
                         // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments rutin
                         Appointment::create([
                             'no_bpjs'          => $request->no_bpjs,
-                            'kode_rs'          => $this->getKodeRs(), // 🟢 Mengisi kode_rs
                             'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
                             'appointment_date' => $date->toDateString(),
                             'notes'            => $request->routine_notes ?? 'Kontrol Terjadwal',
@@ -320,7 +332,7 @@ class RsWebController extends Controller
 
             DB::commit();
             return response()->json(['message' => 'Laporan & Pengingat Sukses Disinkronisasikan!']);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             DB::rollBack();
             return response()->json(['error' => 'Kendala pemrosesan server: ' . $e->getMessage()], 500);
         }

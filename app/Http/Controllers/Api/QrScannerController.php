@@ -54,7 +54,7 @@ class QrScannerController extends Controller
             'message' => 'Analisis Paspor Kesehatan Berhasil!',
             'data' => [
                 'identitas' => [
-                    'nama_pasien' => $user->name,
+                    'nama_pasien' => $user->username,
                     'no_bpjs' => $user->no_bpjs,
                     'email' => $user->email,
                     'gender' => $user->gender ?? 'Tidak Diisi'

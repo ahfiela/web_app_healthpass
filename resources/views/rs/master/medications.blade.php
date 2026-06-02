@@ -50,7 +50,10 @@
         
         fetch('/api/rs/medications', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
             body: JSON.stringify(this.form)
         }).then(res => res.json()).then(data => {
             alert(data.message);
@@ -60,7 +63,12 @@
     },
     deleteItem(id) { 
         if(confirm('Hapus obat ini dari daftar master? (Data laporan lama di dashboard akan tetap aman)')) { 
-            fetch('/api/rs/medications/' + id, { method: 'DELETE' }).then(() => this.initData()); 
+            fetch('/api/rs/medications/' + id, { 
+                method: 'DELETE',
+                headers: {
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                }
+            }).then(() => this.initData()); 
         } 
     }
 }" x-init="initData()">

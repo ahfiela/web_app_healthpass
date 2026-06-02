@@ -48,6 +48,7 @@ Route::middleware('auth:hospital')->group(function () {
         Route::get('/patients/all', [RsWebController::class, 'getAllPatientsUntukWeb']);
         Route::get('/medical-records/history', [RsWebController::class, 'getHistoryUntukWeb']);
         Route::get('/visits/pending', [RsWebController::class, 'getPendingVisits']);
+        Route::get('/visits/today', [RsWebController::class, 'getTodayVisits']);
         Route::post('/visits/{id}/validate', [RsWebController::class, 'validateVisit']);
         
         // 🟢 FIX NAMA METHOD: Diubah dari submitMedicalRecord menjadi submitLaporanMedis agar sesuai dengan isi RsWebController.php

@@ -118,18 +118,31 @@
 
         fetch('/api/rs/medical-records/submit', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}'
+            },
             body: JSON.stringify(payload)
         })
-        .then(res => res.json())
+        .then(res => {
+            return res.json().then(data => {
+                if (!res.ok) {
+                    let errorMsg = data.error || data.message || 'Terjadi kesalahan pada server';
+                    if (data.errors) {
+                        errorMsg += '\n' + Object.values(data.errors).flat().join('\n');
+                    }
+                    throw new Error(errorMsg);
+                }
+                return data;
+            });
+        })
         .then(data => {
-            if (data.error) {
-                alert('Gagal: ' + data.error);
-            } else {
-                alert('Data berhasil disimpan dan disinkronisasikan ke Flutter!');
-                this.showReportModal = false;
-                this.initData();
-            }
+            alert('Data berhasil disimpan dan disinkronisasikan ke Flutter!');
+            this.showReportModal = false;
+            this.initData();
+        })
+        .catch(err => {
+            alert('Gagal: ' + err.message);
         });
     }
 }" x-init="initData()" class="space-y-6 p-4">

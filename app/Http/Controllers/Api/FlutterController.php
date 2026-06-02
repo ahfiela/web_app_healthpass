@@ -250,8 +250,11 @@ class FlutterController extends Controller
         $user = $request->user();
 
         return response()->json([
-            'name' => $user->name, // Sesuaikan dengan nama kolom di database lu (misal 'username' atau 'name')
-            'no_bpjs' => $user->no_bpjs // Sesuaikan dengan nama kolom di database lu
+            'name' => $user->username,
+            'no_bpjs' => $user->no_bpjs,
+            'email' => $user->email,
+            'born' => $user->born,
+            'gender' => $user->gender,
         ], 200);
     }
 }
