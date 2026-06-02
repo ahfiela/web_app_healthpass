@@ -136,6 +136,8 @@ class FlutterController extends Controller
         $latestRecord = $history->first();
         $healthProfile = HealthProfile::where('no_bpjs', $noBpjs)->first();
         $disabilities = $user->disabilities()->pluck('name')->toArray();
+        $criticalDiseasesList = $user->diseases()->where('is_critical', true)->pluck('diseases.name')->toArray();
+        $criticalDiseasesStr = !empty($criticalDiseasesList) ? implode(', ', $criticalDiseasesList) : 'Tidak ada';
 
         // 6. Penyusunan Struktur Paspor Kesehatan (Health Passport)
         $passport = [
@@ -144,7 +146,7 @@ class FlutterController extends Controller
             'blood_type'              => $healthProfile?->blood_type ?? '-',
             'height_cm'               => $healthProfile?->height_cm,
             'weight_kg'               => $healthProfile?->weight_kg,
-            'critical_diseases'       => $healthProfile?->critical_diseases ?? 'Tidak ada',
+            'critical_diseases'       => $criticalDiseasesStr,
             'drug_allergies'          => $healthProfile?->drug_allergies ?? 'Tidak ada',
             'food_allergies'          => $healthProfile?->food_allergies ?? 'Tidak ada',
             'operation_history'       => $healthProfile?->operation_history ?? 'Tidak ada',
