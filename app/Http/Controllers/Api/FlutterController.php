@@ -9,6 +9,7 @@ use App\Models\MedicationSchedule;
 use App\Models\MedicalRecord;
 use App\Models\MedicalRecordEdit;
 use App\Models\Disability;
+use App\Models\Disease;
 use App\Models\HealthProfile;
 use App\Models\User;
 use App\Models\HospitalAdmin;
@@ -215,22 +216,46 @@ class FlutterController extends Controller
         }
 
         $user = $request->user();
+        
+        // 1. Ambil rekam medis dengan penyakit aktif (bukan sembuh-total)
         $records = MedicalRecord::with('disease')
             ->where('no_bpjs', $user->no_bpjs)
             ->get();
 
         $activeDiseaseCodes = $records
             ->where('patient_status', '!=', 'sembuh-total')
-            ->pluck('disease.icd_code')
+            ->map(function ($record) {
+                return $record->disease?->icd_code;
+            })
+            ->filter()
             ->toArray();
+
+        // 2. Ambil juga penyakit aktif dari pivot table user_disease
+        $userDiseaseCodes = $user->diseases()->pluck('diseases.icd_code')->toArray();
+        $allActiveDiseaseCodes = array_unique(array_merge($activeDiseaseCodes, $userDiseaseCodes));
+
+        // 3. Ambil disabilitas/kekurangan dari pivot table user_disability
+        $userDisabilityIds = $user->disabilities()->pluck('disabilities.id')->toArray();
 
         $failed = false;
         $reasons = [];
 
+        // Validasi ICD
         foreach ($rules['forbidden_icds'] ?? [] as $icd) {
-            if (in_array($icd, $activeDiseaseCodes)) {
+            if (in_array($icd, $allActiveDiseaseCodes)) {
                 $failed = true;
-                $reasons[] = "Penyakit aktif ditemukan : {$icd}";
+                $disease = Disease::where('icd_code', $icd)->first();
+                $diseaseName = $disease ? $disease->name : $icd;
+                $reasons[] = "Penyakit aktif dilarang ditemukan: {$diseaseName} ({$icd})";
+            }
+        }
+
+        // Validasi Disabilitas
+        foreach ($rules['forbidden_disabilities'] ?? [] as $disabilityId) {
+            if (in_array($disabilityId, $userDisabilityIds)) {
+                $failed = true;
+                $disability = Disability::find($disabilityId);
+                $disabilityName = $disability ? $disability->name : "Kekurangan fisik dilarang ditemukan: {$disabilityName}";
             }
         }
 
