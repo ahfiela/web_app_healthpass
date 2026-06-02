@@ -51,7 +51,8 @@ Route::middleware('auth:hospital')->group(function () {
         Route::post('/visits/{id}/validate', [RsWebController::class, 'validateVisit']);
         
         // 🟢 FIX NAMA METHOD: Diubah dari submitMedicalRecord menjadi submitLaporanMedis agar sesuai dengan isi RsWebController.php
-        Route::post('/medical-records/submit', [RsWebController::class, 'submitLaporanMedis']);
+        // Pastikan namanya submitMedicalRecord, bukan submitLaporanMedis
+Route::post('/medical-records/submit', [RsWebController::class, 'submitMedicalRecord']);
 
         // Master Dokter
         Route::get('/doctors', [RsWebController::class, 'doctorIndex']);

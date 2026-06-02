@@ -244,4 +244,14 @@ class FlutterController extends Controller
             'message' => 'Lolos verifikasi'
         ]);
     }
+    public function getProfile(Request $request)
+    {
+        // Mengambil data user yang sedang login berdasarkan token Sanctum
+        $user = $request->user();
+
+        return response()->json([
+            'name' => $user->name, // Sesuaikan dengan nama kolom di database lu (misal 'username' atau 'name')
+            'no_bpjs' => $user->no_bpjs // Sesuaikan dengan nama kolom di database lu
+        ], 200);
+    }
 }

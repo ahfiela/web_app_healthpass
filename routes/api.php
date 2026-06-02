@@ -21,4 +21,5 @@ Route::middleware('auth:sanctum')->prefix('pasien')->group(function () {
     
     // Jalur Flutter untuk verifikasi QR Passport
     Route::post('/qr/verify-scan', [FlutterController::class, 'validatePassportQR']);
-}); // 🟢 PERBAIKAN: Menambahkan kurung penutup middleware group yang kurang agar file routing tidak crash
+    Route::get('/profile', [FlutterController::class, 'getProfile']);
+});
