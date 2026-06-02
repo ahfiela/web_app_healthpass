@@ -24,7 +24,7 @@ class InstansiQrController extends Controller
             'forbidden_disabilities' => 'nullable|array',
         ]);
 
-        // Menyusun payload aturan secara dinamis
+        // build payload
         $payload = [
             'instansi' => $request->nama_instansi,
             'forbidden_icds' => $request->forbidden_icd_codes ?? [],
@@ -32,7 +32,7 @@ class InstansiQrController extends Controller
             'created_at' => now()->toDateTimeString(),
         ];
 
-        // Enkripsi payload aturan agar aman dan tidak bisa dimanipulasi
+        // encrypt
         $encryptedRules = encrypt(json_encode($payload));
 
         return back()->with([

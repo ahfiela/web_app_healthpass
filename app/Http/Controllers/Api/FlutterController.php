@@ -217,7 +217,7 @@ class FlutterController extends Controller
 
         $user = $request->user();
         
-        // 1. Ambil rekam medis dengan penyakit aktif (bukan sembuh-total)
+        // get active medical records
         $records = MedicalRecord::with('disease')
             ->where('no_bpjs', $user->no_bpjs)
             ->get();
@@ -230,17 +230,17 @@ class FlutterController extends Controller
             ->filter()
             ->toArray();
 
-        // 2. Ambil juga penyakit aktif dari pivot table user_disease
+        // get active diseases
         $userDiseaseCodes = $user->diseases()->pluck('diseases.icd_code')->toArray();
         $allActiveDiseaseCodes = array_unique(array_merge($activeDiseaseCodes, $userDiseaseCodes));
 
-        // 3. Ambil disabilitas/kekurangan dari pivot table user_disability
+        // get disabilities
         $userDisabilityIds = $user->disabilities()->pluck('disabilities.id')->toArray();
 
         $failed = false;
         $reasons = [];
 
-        // Validasi ICD
+        // validate icd
         foreach ($rules['forbidden_icds'] ?? [] as $icd) {
             if (in_array($icd, $allActiveDiseaseCodes)) {
                 $failed = true;
@@ -250,7 +250,7 @@ class FlutterController extends Controller
             }
         }
 
-        // Validasi Disabilitas
+        // validate disabilities
         foreach ($rules['forbidden_disabilities'] ?? [] as $disabilityId) {
             if (in_array($disabilityId, $userDisabilityIds)) {
                 $failed = true;
