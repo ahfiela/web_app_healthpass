@@ -38,11 +38,17 @@ return [
     */
 
     'guards' => [
-        'web' => [
-            'driver' => 'session',
-            'provider' => 'users',
-        ],
+    'web' => [
+        'driver' => 'session',
+        'provider' => 'users', // Ini biarkan untuk Pasien Mobile
     ],
+    
+    // TAMBAHKAN GUARD BARU INI UNTUK ADMIN RS
+    'hospital' => [
+        'driver' => 'session',
+        'provider' => 'hospitals',
+    ],
+],
 
     /*
     |--------------------------------------------------------------------------
@@ -62,16 +68,23 @@ return [
     */
 
     'providers' => [
-        'users' => [
-            'driver' => 'eloquent',
-            'model' => env('AUTH_MODEL', User::class),
-        ],
+    'users' => [
+        'driver' => 'eloquent',
+        'model' => App\Models\User::class, // Pasien Mobile
+    ],
+
+    // TAMBAHKAN PROVIDER BARU INI
+    'hospitals' => [
+        'driver' => 'eloquent',
+        'model' => App\Models\HospitalAdmin::class,
+    ],
+],
 
         // 'users' => [
         //     'driver' => 'database',
         //     'table' => 'users',
         // ],
-    ],
+
 
     /*
     |--------------------------------------------------------------------------

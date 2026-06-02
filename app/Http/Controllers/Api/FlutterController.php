@@ -3,73 +3,159 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Models\{Visit, Appointment, MedicationSchedule, MedicalRecord, MedicalRecordEdit, Disability};
+use App\Models\Visit;
+use App\Models\Appointment;
+use App\Models\MedicationSchedule;
+use App\Models\MedicalRecord;
+use App\Models\MedicalRecordEdit;
+use App\Models\Disability;
+use App\Models\HealthProfile;
+use App\Models\User;
+use App\Models\HospitalAdmin;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class FlutterController extends Controller
 {
-    public function requestVisit(Request $request)
+    // ENDPOINT 1: Mengambil list faskes murni dari database
+    public function getHospitalList()
     {
-        $request->validate(['rs_name' => 'required|string']);
-        Visit::create([
-            'no_bpjs' => $request->user()->no_bpjs,
-            'rs_name' => $request->rs_name,
-            'visit_date' => now()->toDateString(),
-            'status' => 'pending'
-        ]);
-        return response()->json(['message' => 'Sukses request berobat! Antre di loket RS.']);
+        try {
+            $hospitals = HospitalAdmin::select('id', 'kode_rs', 'nama_rs')->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $hospitals
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengambil data faskes resmi.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
-    public function getDashboardData(Request $request)
+    // ENDPOINT 2: Request pendaftaran kunjungan berobat
+    public function requestVisit(Request $request)
     {
-        $noBpjs = $request->user()->no_bpjs;
-        $now = Carbon::now();
-        $todayStr = $now->toDateString();
-        $timeStr = $now->toTimeString();
+        $request->validate([
+            'kode_rs' => 'required|string',
+        ]);
 
-        // 1. Data Kalender Berobat
-        $appointments = Appointment::where('no_bpjs', $noBpjs)->get();
-
-        // 2. Data Jadwal Minum Obat Selanjutnya + Validasi Hari Spesifik
-        $allMedications = MedicationSchedule::where('no_bpjs', $noBpjs)
-            ->where('start_date', '<=', $todayStr)
-            ->where('end_date', '>=', $todayStr)
-            ->get()
-            ->filter(function($item) use ($now) {
-                if ($item->days_of_week) {
-                    return in_array($now->format('l'), $item->days_of_week);
-                }
-                return true;
-            });
-
-        // Cari Obat Terdekat Selanjutnya
-        $nextMedication = $allMedications->where('remind_at', '>', $timeStr)
-            ->sortBy('remind_at')
-            ->first();
-
-        // Jika hari ini sudah habis, ambil jadwal obat paling pagi untuk besok
-        if (!$nextMedication) {
-            $nextMedication = $allMedications->sortBy('remind_at')->first();
+        $user = Auth::user(); 
+        if (!$user) {
+            return response()->json(['message' => 'Token tidak valid atau kedaluwarsa'], 401);
         }
 
-        // 3. Riwayat Berobat Komprehensif
-        $history = MedicalRecord::with(['doctor', 'room', 'disease'])
-            ->where('no_bpjs', $noBpjs)
-            ->orderBy('created_at', 'desc')
+        $hospital = HospitalAdmin::where('kode_rs', $request->kode_rs)->first();
+        
+        // 🟢 FIX: Memastikan variabel nama cadangan aktif jika nama RS tidak ditemukan di database master
+        $namaRsCadangan = 'Rumah Sakit Umum';
+        $namaRsResmi = $hospital ? $hospital->nama_rs : $namaRsCadangan;
+
+        try {
+            $visit = Visit::create([
+                'no_bpjs'    => $user->no_bpjs,     
+                'kode_rs'    => $request->kode_rs,  
+                'rs_name'    => $namaRsResmi, 
+                'visit_date' => now()->toDateString(),
+                'status'     => 'pending',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Berhasil mengirimkan permohonan kunjungan ke ' . $namaRsResmi,
+                'data'    => $visit
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal memproses data ke database.',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    // ENDPOINT 3: Mengambil Data Dashboard Komplit untuk Flutter Pasien
+    public function getDashboardData(Request $request)
+    {
+        $user = $request->user();
+        $noBpjs = $user->no_bpjs;
+
+        $today = Carbon::today()->toDateString();
+        $now = Carbon::now();
+
+        // 1. Ambil semua jadwal kontrol medis pasien
+        $appointments = Appointment::where('no_bpjs', $noBpjs)
+            ->orderBy('appointment_date')
             ->get();
 
-        // 4. Passport Kesehatan (Ringkasan Kondisi Terakhir)
-        $latest = $history->first();
+        // 2. Ambil jadwal kontrol terdekat (hari ini ke depan)
+        $nextAppointment = Appointment::where('no_bpjs', $noBpjs)
+            ->whereDate('appointment_date', '>=', $today)
+            ->orderBy('appointment_date')
+            ->first();
+
+        // 3. Ambil jadwal konsumsi obat yang aktif untuk hari ini
+        $medicationsRaw = MedicationSchedule::where('no_bpjs', $noBpjs)
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->get();
+
+        // 🟢 FIX: Penanganan ekstraksi JSON days_of_week yang lebih aman dari duplikasi parsing
+        $currentDayName = $now->format('l');
+        $medications = $medicationsRaw->filter(function ($med) use ($currentDayName) {
+            if (!$med->days_of_week) {
+                return true;
+            }
+            
+            $days = $med->days_of_week;
+            if (is_string($days)) {
+                $days = json_decode($days, true);
+            }
+            
+            return is_array($days) ? in_array($currentDayName, $days) : true;
+        })->values();
+
+        // 4. Hitung alarm konsumsi obat berikutnya
+        $currentTimeStr = $now->format('H:i:s');
+        $nextMedication = $medications->where('remind_at', '>', $currentTimeStr)->sortBy('remind_at')->first() 
+            ?? $medications->sortBy('remind_at')->first();
+
+        // 5. Riwayat rekam medis lengkap pasien
+        $history = MedicalRecord::with(['doctor', 'room', 'disease'])
+            ->where('no_bpjs', $noBpjs)
+            ->orderByDesc('created_at')
+            ->get();
+
+        $latestRecord = $history->first();
+        $healthProfile = HealthProfile::where('no_bpjs', $noBpjs)->first();
+        $disabilities = $user->disabilities()->pluck('name')->toArray();
+
+        // 6. Penyusunan Struktur Paspor Kesehatan (Health Passport)
         $passport = [
-            'no_bpjs' => $noBpjs,
-            'patient_name' => $request->user()->username,
-            'last_diagnosis' => $latest ? $latest->disease->name : 'Tidak ada',
-            'last_doctor' => $latest ? $latest->doctor->name : 'Tidak ada',
-            'last_room' => $latest ? $latest->room->name : 'Tidak ada',
-            'medical_status' => $latest ? $latest->patient_status : 'Sehat',
-            'pending_approval_count' => MedicalRecordEdit::whereHas('medicalRecord', function($q) use ($noBpjs) {
+            'patient_name'            => $user->username,
+            'no_bpjs'                 => $noBpjs,
+            'blood_type'              => $healthProfile?->blood_type ?? '-',
+            'height_cm'               => $healthProfile?->height_cm,
+            'weight_kg'               => $healthProfile?->weight_kg,
+            'critical_diseases'       => $healthProfile?->critical_diseases ?? 'Tidak ada',
+            'drug_allergies'          => $healthProfile?->drug_allergies ?? 'Tidak ada',
+            'food_allergies'          => $healthProfile?->food_allergies ?? 'Tidak ada',
+            'operation_history'       => $healthProfile?->operation_history ?? 'Tidak ada',
+            'emergency_contact_name'  => $healthProfile?->emergency_contact_name ?? '-',
+            'emergency_contact_phone' => $healthProfile?->emergency_contact_phone ?? '-',
+            'disabilities'            => $disabilities ?? [],
+            'last_diagnosis'          => $latestRecord?->disease?->name ?? 'Belum ada riwayat',
+            'last_doctor'             => $latestRecord?->doctor?->name ?? '-',
+            'last_room'               => $latestRecord?->room?->name ?? '-',
+            'medical_status'          => $healthProfile?->health_status ?? 'sehat',
+            'pending_approval_count'  => MedicalRecordEdit::whereHas('medicalRecord', function ($q) use ($noBpjs) {
                 $q->where('no_bpjs', $noBpjs);
             })->where('status', 'pending')->count()
         ];
@@ -78,21 +164,24 @@ class FlutterController extends Controller
             'status' => 'success',
             'data' => [
                 'calendar_appointments' => $appointments,
+                'next_appointment'      => $nextAppointment,
                 'next_medication_alarm' => $nextMedication ? [
                     'medicine_name' => $nextMedication->medicine_name,
-                    'rules' => $nextMedication->rules,
-                    'remind_at' => $nextMedication->remind_at,
-                    'trigger_notification' => true
+                    'rules'         => $nextMedication->rules,
+                    'remind_at'     => $nextMedication->remind_at,
                 ] : null,
-                'medical_history' => $history,
-                'health_passport' => $passport
+                'medical_history'       => $history,
+                'health_passport'       => $passport
             ]
         ]);
     }
 
     public function respondToEditRequest(Request $request, $id)
     {
-        $request->validate(['status' => 'required|in:approved,rejected']);
+        $request->validate([
+            'status' => 'required|in:approved,rejected'
+        ]);
+
         $edit = MedicalRecordEdit::with('medicalRecord')->findOrFail($id);
 
         if ($edit->medicalRecord->no_bpjs !== $request->user()->no_bpjs) {
@@ -102,84 +191,57 @@ class FlutterController extends Controller
         if ($request->status === 'approved') {
             $edit->medicalRecord->update($edit->proposed_changes);
         }
-        
+
         $edit->update(['status' => $request->status]);
-        return response()->json(['message' => 'Respon berhasil direkam!']);
+
+        return response()->json(['message' => 'Respon berhasil direkam']);
     }
 
-    // FUNGSI VALIDASI SCAN QR PASPOR DARI INSTANSI
     public function validatePassportQR(Request $request)
     {
         $request->validate([
-            'qr_encrypted_string' => 'required|string', 
+            'qr_encrypted_string' => 'required|string'
         ]);
 
-        // 1. Ekstrak isi kriteria dari QR Code Web Instansi
         try {
-            $decryptedRules = json_decode(decrypt($request->qr_encrypted_string), true);
+            $rules = json_decode(decrypt($request->qr_encrypted_string), true);
         } catch (\Exception $e) {
             return response()->json([
                 'status' => 'failed',
-                'message' => 'QR Code kedaluwarsa, salah, atau tidak dikenali oleh sistem.'
+                'message' => 'QR tidak valid'
             ], 400);
         }
 
-        // 2. Ambil data pasien langsung dari Token Sanctum aktif
         $user = $request->user();
-        $noBpjs = $user->no_bpjs;
+        $records = MedicalRecord::with('disease')
+            ->where('no_bpjs', $user->no_bpjs)
+            ->get();
 
-        // 3. Ambil rekam medis berjalan milik pasien
-        $latestRecords = MedicalRecord::where('no_bpjs', $noBpjs)->with('disease')->get();
-        $activeDiseasesCodes = $latestRecords->where('patient_status', '!=', 'sembuh-total')
+        $activeDiseaseCodes = $records
+            ->where('patient_status', '!=', 'sembuh-total')
             ->pluck('disease.icd_code')
             ->toArray();
 
-        $isFailed = false;
+        $failed = false;
         $reasons = [];
 
-        // --- PROSES COCOKKAN ATURAN QR INSTANSI ---
-
-        // A. Validasi Riwayat Penyakit Klinis Aktif (ICD)
-        if (!empty($decryptedRules['forbidden_icds']) && is_array($decryptedRules['forbidden_icds'])) {
-            foreach ($decryptedRules['forbidden_icds'] as $code) {
-                if (in_array($code, $activeDiseasesCodes)) {
-                    $isFailed = true;
-                    $diseaseData = $latestRecords->where('disease.icd_code', $code)->first();
-                    $reasons[] = "Pasien terdeteksi memiliki riwayat penyakit klinis aktif: " . ($diseaseData->disease->name ?? $code);
-                }
+        foreach ($rules['forbidden_icds'] ?? [] as $icd) {
+            if (in_array($icd, $activeDiseaseCodes)) {
+                $failed = true;
+                $reasons[] = "Penyakit aktif ditemukan : {$icd}";
             }
         }
 
-        // B. Validasi Kriteria Kekurangan / Kelainan Fisik (Dinamis)
-        if (!empty($decryptedRules['forbidden_disabilities']) && is_array($decryptedRules['forbidden_disabilities'])) {
-            $userDisabilities = DB::table('user_disability')
-                ->where('user_id', $user->id)
-                ->pluck('disability_id')
-                ->toArray();
-
-            foreach ($decryptedRules['forbidden_disabilities'] as $disabilityId) {
-                if (in_array($disabilityId, $userDisabilities)) {
-                    $isFailed = true;
-                    $disabilityName = Disability::find($disabilityId)->name ?? 'Kelainan Fisik';
-                    $reasons[] = "Pasien terdeteksi memiliki kondisi kekurangan: " . $disabilityName;
-                }
-            }
-        }
-
-        // 4. Output Response Hasil Verifikasi untuk Aplikasi Flutter
-        if ($isFailed) {
+        if ($failed) {
             return response()->json([
                 'status' => 'failed',
-                'message' => 'Verifikasi Gagal! Anda tidak memenuhi kriteria sehat ' . $decryptedRules['instansi'],
-                'reasons' => $reasons,
-                'instansi' => $decryptedRules['instansi']
-            ], 200);
+                'reasons' => $reasons
+            ]);
         }
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Verifikasi Sukses! Anda lolos kriteria sehat ' . $decryptedRules['instansi'],
-            'instansi' => $decryptedRules['instansi']
-        ], 200);
+            'message' => 'Lolos verifikasi'
+        ]);
     }
 }

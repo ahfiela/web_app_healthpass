@@ -5,7 +5,8 @@
     items: [], showModal: false, isEdit: false,
     searchQuery: '',
     suggestions: [],
-    form: { id: '', icd_code: '', name: '', description: '' },
+    // REVISI: Tambahkan properti is_critical di dalam form state
+    form: { id: '', icd_code: '', name: '', description: '', is_critical: false },
 
     worldDiseases: [
         {icd_code: 'A09', name: 'Gastroenteritis and colitis of infectious origin', desc: 'Diare infeksius akut'},
@@ -24,8 +25,21 @@
     openCreate() { 
         this.isEdit = false; 
         this.searchQuery = '';
-        this.form = { id: '', icd_code: '', name: '', description: '' }; 
+        this.form = { id: '', icd_code: '', name: '', description: '', is_critical: false }; 
         this.showModal = true; 
+    },
+    // REVISI: Tambahkan fungsi openEdit jika suatu saat ingin mengubah status penyakit yang ada
+    openEdit(item) {
+        this.isEdit = true;
+        this.searchQuery = item.icd_code + ' - ' + item.name;
+        this.form = { 
+            id: item.id, 
+            icd_code: item.icd_code, 
+            name: item.name, 
+            description: item.description,
+            is_critical: item.is_critical == 1 ? true : false 
+        };
+        this.showModal = true;
     },
     updateSearch() {
         if (this.searchQuery.length < 2) { this.suggestions = []; return; }
@@ -38,6 +52,7 @@
         this.form.icd_code = disease.icd_code;
         this.form.name = disease.name;
         this.form.description = disease.desc;
+        this.form.is_critical = false; // default awal
         this.searchQuery = disease.icd_code + ' - ' + disease.name;
         this.suggestions = [];
     },
@@ -73,19 +88,26 @@
                     <th class="p-3">Kode ICD-10</th>
                     <th class="p-3">Nama Resmi Global</th>
                     <th class="p-3">Keterangan</th>
-                    <th class="p-3 text-center">Aksi</th>
+                    <th class="p-3">Kategori</th> <th class="p-3 text-center">Aksi</th>
                 </tr>
             </thead>
             <tbody class="divide-y text-gray-700">
                 <template x-if="items.length === 0">
-                    <tr><td colspan="4" class="p-4 text-center text-gray-400 text-xs">Belum ada data penyakit.</td></tr>
+                    <tr><td colspan="5" class="p-4 text-center text-gray-400 text-xs">Belum ada data penyakit.</td></tr>
                 </template>
                 <template x-for="item in items" :key="item.id">
                     <tr class="hover:bg-gray-50/50 transition">
                         <td class="p-3 font-mono font-bold text-red-600" x-text="item.icd_code"></td>
                         <td class="p-3 font-semibold text-gray-900" x-text="item.name"></td>
                         <td class="p-3 text-gray-500" x-text="item.description"></td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded text-[11px] font-bold uppercase"
+                                  :class="item.is_critical == 1 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'"
+                                  x-text="item.is_critical == 1 ? 'Kritis (Passport)' : 'Penyakit Biasa'">
+                            </span>
+                        </td>
                         <td class="p-3 flex justify-center gap-2">
+                            <button @click="openEdit(item)" class="text-blue-600 text-xs font-semibold px-2"><i class="fa-solid fa-pen"></i> Edit</button>
                             <button @click="deleteItem(item.id)" class="text-red-600 text-xs font-semibold px-2"><i class="fa-solid fa-trash"></i> Hapus</button>
                         </td>
                     </tr>
@@ -96,11 +118,11 @@
 
     <div x-show="showModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50" x-transition style="display: none;">
         <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border relative" @click.away="showModal = false">
-            <h3 class="text-md font-bold text-gray-800 mb-4">Validasi Penyakit Standar WHO</h3>
+            <h3 class="text-md font-bold text-gray-800 mb-4" x-text="isEdit ? 'Edit Data Diagnosa Master' : 'Validasi Penyakit Standar WHO'"></h3>
             <form @submit.prevent="submitForm()" class="space-y-4">
                 <div class="relative">
                     <label class="block text-xs font-bold text-gray-500 mb-1">CARI NAMA / KODE PENYAKIT</label>
-                    <input type="text" x-model="searchQuery" @input="updateSearch()" class="w-full border p-2.5 rounded-lg text-sm" placeholder="Ketik kata kunci...">
+                    <input type="text" x-model="searchQuery" :disabled="isEdit" @input="updateSearch()" class="w-full border p-2.5 rounded-lg text-sm disabled:bg-gray-50" placeholder="Ketik kata kunci...">
                     
                     <div x-show="suggestions.length > 0" class="absolute left-0 right-0 bg-white border mt-1 rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto divide-y text-xs">
                         <template x-for="disease in suggestions">
@@ -109,6 +131,16 @@
                             </div>
                         </template>
                     </div>
+                </div>
+
+                <div class="bg-gray-50 p-3 rounded-xl border border-gray-200">
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input type="checkbox" x-model="form.is_critical" class="mt-0.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        <div>
+                            <span class="block text-xs font-bold text-gray-800">Tandai Sebagai Penyakit Kritis</span>
+                            <span class="block text-[11px] text-gray-500 mt-0.5">Jika dicentang, rekam medis pasien dengan penyakit ini otomatis dikirim ke Health Passport bagian bawah.</span>
+                        </div>
+                    </label>
                 </div>
 
                 <div class="flex justify-end gap-2 text-xs font-bold">

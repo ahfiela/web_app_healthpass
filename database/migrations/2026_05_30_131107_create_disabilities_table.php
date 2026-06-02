@@ -18,11 +18,13 @@ return new class extends Migration
 
         // 2. Tabel Pivot Hubungan Pasien dengan Kelainan yang Dimiliki
         Schema::create('user_disability', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('disability_id')->constrained('disabilities')->onDelete('cascade');
-            $table->timestamps();
-        });
+    $table->id();
+    $table->foreignId('user_id')->constrained('users')->onDelete('cascade');
+    $table->foreignId('disability_id')->constrained('disabilities')->onDelete('cascade');
+    $table->string('status')->default('Aman'); // <--- TAMBAHKAN INI (Contoh: 'Aman', 'Perlu Pengawasan')
+    $table->string('notes')->nullable();  // <--- TAMBAHKAN INI (Contoh: 'Minus 2', 'Silinder 1')
+    $table->timestamps();
+});
     }
 
     public function down(): void

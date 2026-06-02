@@ -3,86 +3,97 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-// REVISI: Pastikan Medication sudah dimasukkan ke dalam daftar Models
 use App\Models\{Doctor, Room, Disease, Visit, MedicalRecord, MedicalRecordEdit, Appointment, MedicationSchedule, User, Medication};
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Validation\Rule;
 
 class RsWebController extends Controller
 {
+    // Fungsi Pembantu Multi-Tenant
+    private function getKodeRs() { 
+        return auth()->guard('hospital')->user()->kode_rs; 
+    }
+
     // ==========================================
-    // 1. MASTER DATA CRUD: DOKTER (Gelar dr. di Frontend)
+    // 1. MASTER DATA CRUD: DOKTER
     // ==========================================
     public function doctorIndex() { 
-        return response()->json(Doctor::all()); 
+        return response()->json(Doctor::where('kode_rs', $this->getKodeRs())->get()); 
     }
     
     public function doctorStore(Request $request) {
+        $kodeRs = $this->getKodeRs();
         $data = $request->validate([
-            'nip' => 'required|unique:doctors,nip', 
+            'nip' => ['required', Rule::unique('doctors', 'nip')->where('kode_rs', $kodeRs)], 
             'name' => 'required', 
             'specialist' => 'required'
         ]);
+        
+        $data['kode_rs'] = $kodeRs; 
         return response()->json(Doctor::create($data), 201);
     }
 
-    // TAMBAHAN: Fungsi Update Dokter
     public function doctorUpdate(Request $request, $id) {
-        $doctor = Doctor::findOrFail($id);
+        $kodeRs = $this->getKodeRs();
+        $doctor = Doctor::where('id', $id)->where('kode_rs', $kodeRs)->firstOrFail();
+        
         $data = $request->validate([
-            'nip' => 'required|unique:doctors,nip,' . $id, // Ignore id milik dokter ini sendiri saat validasi
+            'nip' => ['required', Rule::unique('doctors', 'nip')->where('kode_rs', $kodeRs)->ignore($id)],
             'name' => 'required',
             'specialist' => 'required'
         ]);
+        
         $doctor->update($data);
         return response()->json(['message' => 'Data dokter berhasil diubah', 'data' => $doctor]);
     }
 
-    // TAMBAHAN: Fungsi Delete Dokter
     public function doctorDestroy($id) {
-        $doctor = Doctor::findOrFail($id);
+        $doctor = Doctor::where('id', $id)->where('kode_rs', $this->getKodeRs())->firstOrFail();
         $doctor->delete();
         return response()->json(['message' => 'Dokter berhasil dihapus dari master data']);
     }
-
 
     // ==========================================
     // 2. MASTER DATA CRUD: RUANGAN / POLI
     // ==========================================
     public function roomIndex() { 
-        return response()->json(Room::all()); 
+        return response()->json(Room::where('kode_rs', $this->getKodeRs())->get()); 
     }
     
     public function roomStore(Request $request) {
+        $kodeRs = $this->getKodeRs();
         $data = $request->validate([
-            'room_code' => 'required|unique:rooms,room_code', 
+            'room_code' => ['required', Rule::unique('rooms', 'room_code')->where('kode_rs', $kodeRs)], 
             'name' => 'required'
         ]);
+        
+        $data['kode_rs'] = $kodeRs; 
         return response()->json(Room::create($data), 201);
     }
 
-    // TAMBAHAN: Fungsi Update Ruangan
     public function roomUpdate(Request $request, $id) {
-        $room = Room::findOrFail($id);
+        $kodeRs = $this->getKodeRs();
+        $room = Room::where('id', $id)->where('kode_rs', $kodeRs)->firstOrFail();
+        
         $data = $request->validate([
-            'room_code' => 'required|unique:rooms,room_code,' . $id,
+            'room_code' => ['required', Rule::unique('rooms', 'room_code')->where('kode_rs', $kodeRs)->ignore($id)],
             'name' => 'required'
         ]);
+        
         $room->update($data);
         return response()->json(['message' => 'Data ruangan berhasil diubah', 'data' => $room]);
     }
 
-    // TAMBAHAN: Fungsi Delete Ruangan
     public function roomDestroy($id) {
-        $room = Room::findOrFail($id);
+        $room = Room::where('id', $id)->where('kode_rs', $this->getKodeRs())->firstOrFail();
         $room->delete();
         return response()->json(['message' => 'Ruangan berhasil dihapus dari master data']);
     }
 
-
     // ==========================================
-    // 3. MASTER DATA CRUD: PENYAKIT (ICD-10)
+    // 3. MASTER DATA CRUD: PENYAKIT (ICD-10 Umum)
     // ==========================================
     public function diseaseIndex() { 
         return response()->json(Disease::all()); 
@@ -92,51 +103,51 @@ class RsWebController extends Controller
         $data = $request->validate([
             'icd_code' => 'required|unique:diseases,icd_code', 
             'name' => 'required', 
-            'description' => 'nullable'
+            'description' => 'nullable',
+            'is_critical' => 'nullable|boolean'
         ]);
         return response()->json(Disease::create($data), 201);
     }
 
-    // TAMBAHAN: Fungsi Update Penyakit
     public function diseaseUpdate(Request $request, $id) {
         $disease = Disease::findOrFail($id);
         $data = $request->validate([
-            'icd_code' => 'required|unique:diseases,icd_code,' . $id,
+            'icd_code' => 'required|unique:diseases,icd_code,' . $id, 
             'name' => 'required',
-            'description' => 'nullable'
+            'description' => 'nullable',
+            'is_critical' => 'nullable|boolean'
         ]);
         $disease->update($data);
         return response()->json(['message' => 'Data penyakit berhasil diubah', 'data' => $disease]);
     }
 
-    // TAMBAHAN: Fungsi Delete Penyakit
     public function diseaseDestroy($id) {
-        $disease = Disease::findOrFail($id);
-        $disease->delete();
-        return response()->json(['message' => 'Penyakit berhasil dihapus dari master data']);
+        Disease::findOrFail($id)->delete();
+        return response()->json(['message' => 'Penyakit berhasil dihapus']);
     }
 
-
     // ==========================================
-    // 4. MASTER DATA CRUD: OBAT APOTEK (WHO STANDAR)
+    // 4. MASTER DATA CRUD: OBAT APOTEK
     // ==========================================
     public function getMedications() {
-        return response()->json(Medication::all());
+        return response()->json(Medication::where('kode_rs', $this->getKodeRs())->get());
     }
 
     public function storeMedication(Request $request) {
+        $kodeRs = $this->getKodeRs();
         $validated = $request->validate([
             'name' => 'required|string',
             'type' => 'required|string',
             'stock' => 'required|integer'
         ]);
+        
+        $validated['kode_rs'] = $kodeRs; 
         $medication = Medication::create($validated);
         return response()->json(['message' => 'Obat berhasil disimpan!', 'data' => $medication], 201);
     }
 
-    // TAMBAHAN: Fungsi Update Obat
     public function updateMedication(Request $request, $id) {
-        $med = Medication::findOrFail($id);
+        $med = Medication::where('id', $id)->where('kode_rs', $this->getKodeRs())->firstOrFail();
         $validated = $request->validate([
             'name' => 'required|string',
             'type' => 'required|string',
@@ -147,112 +158,171 @@ class RsWebController extends Controller
     }
 
     public function deleteMedication($id) {
-        $med = Medication::findOrFail($id);
-        $med->delete(); 
+        Medication::where('id', $id)->where('kode_rs', $this->getKodeRs())->firstOrFail()->delete(); 
         return response()->json(['message' => 'Obat berhasil dihapus dari master data']);
     }
-
 
     // ==========================================
     // 5. STATISTIK DASHBOARD
     // ==========================================
     public function getStats() {
+        $kodeRs = $this->getKodeRs();
         return response()->json([
             'total_pasien' => User::count(),
-            'kunjungan_hari_ini' => Visit::where('visit_date', now()->toDateString())->count(),
-            'pending_edits' => MedicalRecordEdit::where('status', 'pending')->count()
+            'kunjungan_hari_ini' => Visit::where('kode_rs', $kodeRs)->where('visit_date', now()->toDateString())->count(),
+            // Menghitung edit request berdasarkan rekam medis -> kunjungan RS yang login
+            'pending_edits' => MedicalRecordEdit::whereHas('medicalRecord.visit', function($q) use ($kodeRs) {
+                $q->where('kode_rs', $kodeRs);
+            })->where('status', 'pending')->count()
         ]);
     }
-
 
     // ==========================================
     // 6. OPERASIONAL MEDIS & SINKRONISASI JADWAL
     // ==========================================
-    public function getPendingVisits() { 
-        return response()->json(Visit::where('status', 'pending')->get()); 
-    }
+    public function getPendingVisits() {
+    // 🟢 FIX: Hilangkan 'completed' agar pasien yang sudah ditangani hilang dari daftar antrean hari ini
+    return response()->json(
+        Visit::where('kode_rs', $this->getKodeRs())
+            ->whereIn('status', ['pending', 'approved']) 
+            ->whereDate('visit_date', \Carbon\Carbon::today())
+            ->orderBy('status', 'asc')
+            ->get()
+    );
+}
 
     public function validateVisit(Request $request, $id) {
         $request->validate(['status' => 'required|in:approved,rejected']);
-        Visit::findOrFail($id)->update(['status' => $request->status]);
+        Visit::where('kode_rs', $this->getKodeRs())->findOrFail($id)->update(['status' => $request->status]);
         return response()->json(['message' => 'Visit updated successfully']);
     }
 
     public function submitMedicalRecord(Request $request)
     {
         $request->validate([
-            'visit_id' => 'required|exists:visits,id',
-            'no_bpjs' => 'required|string|digits:13',
-            'doctor_id' => 'required|exists:doctors,id',
-            'room_id' => 'required|exists:rooms,id',
-            'disease_id' => 'required|exists:diseases,id',
-            'symptoms' => 'required|string',
-            'patient_status' => 'required|in:sembuh-total,rawat-jalan,rawat-inap',
-            'appointments' => 'nullable|array',
-            'medications' => 'nullable|array'
+            'visit_id'       => 'required',
+            'no_bpjs'        => 'required|string|digits:13',
+            'doctor_id'      => 'required',
+            'room_id'        => 'required',
+            'disease_id'     => 'required',
+            'symptoms'       => 'required|string',
+            'patient_status' => 'required|string',
         ]);
 
         DB::beginTransaction();
         try {
-            $visit = Visit::findOrFail($request->visit_id);
+            // 1. Selesaikan Status Kunjungan Antrean Rumah Sakit
+            $visit = Visit::where('id', $request->visit_id)->where('kode_rs', $this->getKodeRs())->firstOrFail();
             $visit->update(['status' => 'completed']);
 
+            // 2. Simpan Rekam Medis Utama
+            // 🟢 SEKARANG AMAN: kode_rs dimasukkan dan model dengan $guarded=[] tidak akan memblokirnya
             MedicalRecord::create([
-                'visit_id' => $visit->id,
-                'no_bpjs' => $request->no_bpjs,
-                'doctor_id' => $request->doctor_id,
-                'room_id' => $request->room_id,
-                'disease_id' => $request->disease_id,
-                'symptoms' => $request->symptoms,
+                'visit_id'       => $visit->id,
+                'no_bpjs'        => $request->no_bpjs,
+                'kode_rs'        => $this->getKodeRs(), // 🟢 Mengisi kolom kode_rs agar MySQL tidak error
+                'doctor_id'      => $request->doctor_id,
+                'room_id'        => $request->room_id,
+                'disease_id'     => $request->disease_id,
+                'symptoms'       => $request->symptoms,
                 'patient_status' => $request->patient_status,
             ]);
 
-            if ($request->has('appointments')) {
+            // 3. Update Profil Paspor Kesehatan Pasien
+            $healthProfile = \App\Models\HealthProfile::firstOrCreate(
+                ['no_bpjs' => $request->no_bpjs],
+                ['blood_type' => 'O']
+            );
+            if ($request->filled('drug_allergies')) { $healthProfile->drug_allergies = $request->drug_allergies; }
+            if ($request->filled('food_allergies')) { $healthProfile->food_allergies = $request->food_allergies; }
+            $healthProfile->health_status = $request->patient_status === 'rawat-inap' ? 'darurat' : ($request->patient_status === 'rawat-jalan' ? 'perlu_pemantauan' : 'sehat');
+            $healthProfile->save();
+
+            // 4. Hubungkan Penyakit Kritis ke Pivot Table Pasien
+            $disease = Disease::find($request->disease_id);
+            $userPasien = User::where('no_bpjs', $request->no_bpjs)->first();
+            if ($userPasien && $disease) {
+                if ($disease->is_critical || stripos($disease->name, 'tuberculosis') !== false || stripos($disease->name, 'tbc') !== false) {
+                    DB::table('user_disease')->updateOrInsert(
+                        ['user_id' => $userPasien->id, 'disease_id' => $disease->id],
+                        ['status' => 'perlu_pemantauan', 'notes' => 'Terdeteksi di ' . $this->getNamaRs(), 'created_at' => now(), 'updated_at' => now()]
+                    );
+                }
+            }
+
+            // 5. PROSES PARSING JADWAL KONTROL BEROBAT
+            if ($request->appointment_mode === 'custom' && $request->has('appointments')) {
                 foreach ($request->appointments as $apt) {
-                    if ($apt['type'] === 'spesifik') {
-                        foreach ($apt['specific_dates'] as $date) {
-                            Appointment::create([
-                                'no_bpjs' => $request->no_bpjs,
-                                'rs_name' => $visit->rs_name,
-                                'appointment_date' => Carbon::parse($date)->toDateString(),
-                                'notes' => $apt['notes'],
-                            ]);
-                        }
-                    } else {
-                        $start = Carbon::parse($apt['start_date']);
-                        $end = Carbon::parse($apt['end_date']);
-                        while ($start->lte($end)) {
-                            Appointment::create([
-                                'no_bpjs' => $request->no_bpjs,
-                                'rs_name' => $visit->rs_name,
-                                'appointment_date' => $start->toDateString(),
-                                'notes' => $apt['notes'],
-                            ]);
-                            $start->addWeeks($apt['interval_weeks']);
-                        }
+                    if (!empty($apt['appointment_date'])) {
+                        // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments
+                        Appointment::create([
+                            'no_bpjs'          => $request->no_bpjs,
+                            'kode_rs'          => $this->getKodeRs(), // 🟢 Mengisi kode_rs
+                            'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
+                            'appointment_date' => $apt['appointment_date'],
+                            'notes'            => $apt['notes'] ?? 'Kontrol Medis',
+                        ]);
+                    }
+                }
+            } elseif ($request->appointment_mode === 'routine' && !empty($request->routine_start_date)) {
+                $startDate = Carbon::parse($request->routine_start_date);
+                $duration = intval($request->routine_duration ?? 1);
+                $selectedDaysInput = $request->selected_days ?? []; 
+
+                $dayMapping = [
+                    1 => 'Monday', 2 => 'Tuesday', 3 => 'Wednesday',
+                    4 => 'Thursday', 5 => 'Friday', 6 => 'Saturday', 7 => 'Sunday'
+                ];
+                
+                $daysFilter = [];
+                foreach ($selectedDaysInput as $dayNum) {
+                    if (isset($dayMapping[$dayNum])) { $daysFilter[] = $dayMapping[$dayNum]; }
+                }
+
+                $endDate = $request->routine_type === 'weekly' 
+                    ? $startDate->copy()->addWeeks($duration) 
+                    : $startDate->copy()->addMonths($duration);
+
+                for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+                    if (in_array($date->format('l'), $daysFilter)) {
+                        // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments rutin
+                        Appointment::create([
+                            'no_bpjs'          => $request->no_bpjs,
+                            'kode_rs'          => $this->getKodeRs(), // 🟢 Mengisi kode_rs
+                            'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
+                            'appointment_date' => $date->toDateString(),
+                            'notes'            => $request->routine_notes ?? 'Kontrol Terjadwal',
+                        ]);
                     }
                 }
             }
 
+            // 6. PROSES SIMPAN ALARM MINUM OBAT
             if ($request->has('medications')) {
                 foreach ($request->medications as $med) {
-                    MedicationSchedule::create([
-                        'no_bpjs' => $request->no_bpjs,
-                        'medicine_name' => $med['medicine_name'],
-                        'rules' => $med['rules'],
-                        'remind_at' => $med['remind_at'],
-                        'start_date' => $med['start_date'],
-                        'end_date' => $med['end_date'],
-                        'days_of_week' => $med['days_of_week'] ?? null,
-                    ]);
+                    if (!empty($med['medicine_name'])) {
+                        $startStr = now()->toDateString();
+                        $endStr = now()->addDays(intval($med['duration_days'] ?? 1) - 1)->toDateString();
+                        $allEnglishDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+                        MedicationSchedule::create([
+                            'no_bpjs'       => $request->no_bpjs,
+                            'medicine_name' => $med['medicine_name'],
+                            'rules'         => $med['rules'],
+                            'remind_at'     => $med['remind_at'],
+                            'start_date'    => $startStr,
+                            'end_date'      => $endStr,
+                            'days_of_week'  => json_encode($allEnglishDays),
+                        ]);
+                    }
                 }
             }
 
             DB::commit();
-            return response()->json(['message' => 'Laporan sukses diproses!']);
+            return response()->json(['message' => 'Laporan & Pengingat Sukses Disinkronisasikan!']);
         } catch (\Exception $e) {
             DB::rollBack();
-            return response()->json(['error' => $e->getMessage()], 500);
+            return response()->json(['error' => 'Kendala pemrosesan server: ' . $e->getMessage()], 500);
         }
     }
 
@@ -267,12 +337,18 @@ class RsWebController extends Controller
     }
 
     public function getAllPatientsUntukWeb() {
-    // Mengembalikan data seluruh user terdaftar untuk tabel database di dashboard web
-    return response()->json(User::orderBy('created_at', 'desc')->get());
-}
+        return response()->json(User::orderBy('created_at', 'desc')->get());
+    }
 
-public function getHistoryUntukWeb() {
-    // Mengembalikan data riwayat lengkap beserta relasinya untuk tabel log di menu visits web
-    return response()->json(MedicalRecord::with(['doctor', 'room', 'disease'])->orderBy('created_at', 'desc')->get());
-}
+    public function getHistoryUntukWeb() { 
+        // 🟢 FIX: Dikembalikan menggunakan whereHas('visit') karena tabel medical_records tidak punya kode_rs langsung
+        return response()->json(
+            MedicalRecord::with(['doctor', 'room', 'disease'])
+                ->whereHas('visit', function($query) {
+                    $query->where('kode_rs', $this->getKodeRs());
+                })
+                ->orderBy('created_at', 'desc')
+                ->get()
+        ); 
+    }
 }

@@ -7,27 +7,26 @@
     allPatients: [],
 
     initData() {
-        // 1. Ambil Statistik Ringkas
+        // Ambil Statistik Ringkas
         fetch('/api/rs/dashboard/stats')
             .then(res => res.json())
             .then(data => this.stats = data || {});
             
-        // 2. Ambil data pasien berobat hari ini
+        // Ambil Data Pasien Hari Ini
         fetch('/api/rs/visits/pending')
             .then(res => res.json())
             .then(data => {
-                // Pastikan data berbentuk array, jika dibungkus objek .data kita amankan
                 this.todayPatients = Array.isArray(data) ? data : (data.data || []);
             });
 
-        // 3. Ambil data seluruh pasien terdaftar
-        fetch('/api/pasien/dashboard')
+        // Ambil Seluruh Data Pasien
+        fetch('/api/rs/patients/all')
             .then(res => res.json())
-            .then(res => {
-                this.allPatients = res.data?.all_users || res.all_users || [];
+            .then(data => {
+                this.allPatients = Array.isArray(data) ? data : [];
             });
     }
-}" x-init="initData()">
+}" x-init="initData(); setInterval(() => initData(), 5000);">
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-white p-6 rounded-xl border flex items-center justify-between shadow-sm">
@@ -116,7 +115,7 @@
                         <template x-for="user in allPatients" :key="user.id">
                             <tr class="hover:bg-gray-50/50 transition">
                                 <td class="p-3 font-mono" x-text="user.id || '-'"></td>
-                                <td class="p-3 font-semibold text-gray-900" x-text="user.name || '-'"></td>
+                                <td class="p-3 font-semibold text-gray-900" x-text="user.username || '-'"></td>
                                 <td class="p-3 text-gray-500" x-text="user.email || '-'"></td>
                                 <td class="p-3 text-xs text-gray-400" x-text="user.created_at ? new Date(user.created_at).toLocaleDateString('id-ID') : '-'"></td>
                             </tr>

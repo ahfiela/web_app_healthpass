@@ -23,6 +23,7 @@ class Medication extends Model
      * @var array<int, string>
      */
     protected $fillable = [
+        'kode_rs',
         'name',  // Nama formula obat standar WHO
         'type',  // Golongan / Khasiat klinis obat
         'stock', // Jumlah stok awal di apotek RS

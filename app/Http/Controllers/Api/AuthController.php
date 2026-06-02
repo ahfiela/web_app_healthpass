@@ -18,51 +18,94 @@ class AuthController extends Controller
             'password' => 'required|string|min:8',
         ]);
 
-        // Simulasi Tembak Server BPJS Pusat untuk mengambil data autentik
-        $response = Http::post('https://server-bpjs-inti.railway.internal/api/bpjs/validate', [
-            'no_bpjs' => $request->no_bpjs
-        ]);
+        try {
+            $response = Http::timeout(10)
+                ->withoutVerifying()
+                ->post('https://bpjs-api-production.up.railway.app/api/bpjs/validate', [
+                    'no_bpjs' => $request->no_bpjs
+                ]);
 
-        if ($response->failed() || $response->json('status') !== 'aktif') {
-            return response()->json(['status' => 'error', 'message' => 'BPJS tidak aktif atau tidak terdaftar.'], 400);
+            // Jika server validasi memberikan respon 404 (Nomor tidak terdaftar)
+            if ($response->status() === 404) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Nomor BPJS tidak ditemukan atau tidak terdaftar di sistem pusat.'
+                ], 404);
+            }
+
+            // Jika error HTTP selain 404 (misal server down / 500)
+            if ($response->failed()) {
+                return response()->json([
+                    'status' => 'error', 
+                    'message' => 'Gagal terhubung ke server verifikasi BPJS.'
+                ], 502);
+            }
+
+            if ($response->json('status') !== 'aktif') {
+                return response()->json([
+                    'status' => 'error', 
+                    'message' => 'BPJS tidak aktif atau tidak terdaftar.'
+                ], 400);
+            }
+
+            $bpjsData = $response->json('data');
+
+            $user = User::create([
+                'username' => $bpjsData['username'] ?? 'Pasien Tanpa Nama', 
+                'email'    => $request->email,
+                'password' => Hash::make($request->password),
+                'no_bpjs'  => $request->no_bpjs,
+                'born'     => $bpjsData['born'] ?? now()->format('Y-m-d'),
+                'gender'   => $bpjsData['gender'] ?? 'male', 
+            ]);
+
+            return response()->json([
+                'status' => 'success',
+                'token'  => $user->createToken('flutter_token')->plainTextToken
+            ], 201);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Terjadi gangguan internal: ' . $e->getMessage()
+            ], 500);
         }
-
-        $bpjsData = $response->json('data');
-
-        $user = User::create([
-            'username' => $bpjsData['username'], 
-            'email'    => $request->email,
-            'password' => Hash::make($request->password),
-            'no_bpjs'  => $request->no_bpjs,
-            'born'     => $bpjsData['born'],
-            'gender'   => $bpjsData['gender'],
-        ]);
-
-        return response()->json([
-            'status' => 'success',
-            'token'  => $user->createToken('flutter_token')->plainTextToken
-        ], 201);
     }
 
     public function login(Request $request)
-    {
-        $request->validate([
-            'login'    => 'required|string',
-            'password' => 'required|string',
-        ]);
+{
+    $loginInput = $request->input('login');
 
-        $user = User::where('email', $request->login)
-                    ->orWhere('no_bpjs', $request->login)
-                    ->first();
-
-        if (!$user || !Hash::check($request->password, $user->password)) {
-            return response()->json(['status' => 'error', 'message' => 'Kredensial salah.'], 401);
-        }
-
+    if (!$loginInput || !$request->password) {
         return response()->json([
-            'status' => 'success',
-            'token'  => $user->createToken('flutter_token')->plainTextToken,
-            'username' => $user->username
-        ], 200);
+            'status' => 'error',
+            'message' => 'Nomor BPJS / Email / Username dan password wajib diisi.'
+        ], 422);
     }
+
+    $user = User::where('email', $loginInput)
+        ->orWhere('no_bpjs', $loginInput)
+        ->orWhere('username', $loginInput)
+        ->first();
+
+    if (!$user) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Nama, Nomor BPJS / Email tidak ditemukan.'
+        ], 404);
+    }
+
+    if (!Hash::check($request->password, $user->password)) {
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Password yang dimasukkan salah.'
+        ], 401);
+    }
+
+    return response()->json([
+        'status' => 'success',
+        'token' => $user->createToken('flutter_token')->plainTextToken,
+        'username' => $user->username,
+    ]);
+}
 }
