@@ -22,21 +22,26 @@ class InstansiQrController extends Controller
             'nama_instansi' => 'required|string',
             'forbidden_icd_codes' => 'nullable|array',
             'forbidden_disabilities' => 'nullable|array',
+            'use_bypass' => 'nullable',
         ]);
 
-        // build payload
+        // build compressed payload
         $payload = [
-            'instansi' => $request->nama_instansi,
-            'forbidden_icds' => $request->forbidden_icd_codes ?? [],
-            'forbidden_disabilities' => $request->forbidden_disabilities ?? [],
-            'created_at' => now()->toDateTimeString(),
+            'ins' => $request->nama_instansi,
+            'icd' => $request->forbidden_icd_codes ?? [],
+            'dis' => $request->forbidden_disabilities ?? [],
+            'cat' => now()->toDateTimeString(),
         ];
 
-        // encrypt
-        $encryptedRules = encrypt(json_encode($payload));
+        // check if bypass (unencrypted) is requested
+        if ($request->has('use_bypass')) {
+            $qrString = json_encode($payload);
+        } else {
+            $qrString = encrypt(json_encode($payload));
+        }
 
         return back()->with([
-            'qr_string' => $encryptedRules,
+            'qr_string' => $qrString,
             'instansi' => $request->nama_instansi
         ]);
     }

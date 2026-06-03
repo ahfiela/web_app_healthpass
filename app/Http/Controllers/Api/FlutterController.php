@@ -216,10 +216,14 @@ class FlutterController extends Controller
         try {
             $rules = json_decode(decrypt($request->qr_encrypted_string), true);
         } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'failed',
-                'message' => 'QR tidak valid'
-            ], 400);
+            // Fallback: try raw JSON directly if decryption fails
+            $rules = json_decode($request->qr_encrypted_string, true);
+            if (!$rules) {
+                return response()->json([
+                    'status' => 'failed',
+                    'message' => 'QR tidak valid atau format tidak dikenali.'
+                ], 400);
+            }
         }
 
         $user = $request->user();
@@ -247,8 +251,12 @@ class FlutterController extends Controller
         $failed = false;
         $reasons = [];
 
+        // Support both compressed and full keys
+        $forbiddenIcds = $rules['icd'] ?? $rules['forbidden_icds'] ?? [];
+        $forbiddenDisabilities = $rules['dis'] ?? $rules['forbidden_disabilities'] ?? [];
+
         // validate icd
-        foreach ($rules['forbidden_icds'] ?? [] as $icd) {
+        foreach ($forbiddenIcds as $icd) {
             if (in_array($icd, $allActiveDiseaseCodes)) {
                 $failed = true;
                 $disease = Disease::where('icd_code', $icd)->first();
@@ -258,11 +266,12 @@ class FlutterController extends Controller
         }
 
         // validate disabilities
-        foreach ($rules['forbidden_disabilities'] ?? [] as $disabilityId) {
+        foreach ($forbiddenDisabilities as $disabilityId) {
             if (in_array($disabilityId, $userDisabilityIds)) {
                 $failed = true;
                 $disability = Disability::find($disabilityId);
-                $disabilityName = $disability ? $disability->name : "Kekurangan fisik dilarang ditemukan: {$disabilityName}";
+                $disabilityName = $disability ? $disability->name : "Kekurangan fisik id: {$disabilityId}";
+                $reasons[] = "Kekurangan fisik dilarang ditemukan: {$disabilityName}";
             }
         }
 

@@ -106,6 +106,15 @@
                         </div>
                     </div>
 
+                    <!-- Option Bypass Enkripsi -->
+                    <div class="bg-amber-50 border border-amber-100 rounded-xl p-3 flex items-start gap-3 mt-4">
+                        <input type="checkbox" name="use_bypass" id="useBypass" value="1" checked class="w-4 h-4 rounded text-amber-600 border-slate-300 focus:ring-amber-500 mt-0.5 cursor-pointer">
+                        <div class="leading-tight">
+                            <label for="useBypass" class="block text-xs font-bold text-amber-900 cursor-pointer select-none">QR Tanpa Enkripsi (Sangat Direkomendasikan)</label>
+                            <p class="text-[10px] text-amber-700 mt-1">Menghasilkan data QR JSON polos dengan tingkat kerapatan rendah (kotak besar) sehingga sangat mudah & cepat di-scan oleh kamera laptop/webcam.</p>
+                        </div>
+                    </div>
+
                     <button type="submit" id="btnSubmit" disabled
                         class="w-full bg-slate-200 text-slate-400 font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 transition duration-200 cursor-not-allowed">
                         <i class="fa-solid fa-lock text-sm"></i> Pilih Minimal Satu Kriteria Kesehatan
