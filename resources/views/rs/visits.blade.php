@@ -1,193 +1,7 @@
 @extends('rs.layout.app')
 
 @section('content')
-<div x-data="{ 
-    pendingVisits: [],
-    historyRecords: [],
-    showReportModal: false,
-    doctors: [], rooms: [], diseases: [], medicationsMaster: [],
-    
-    // Konfigurasi Penjadwalan Kontrol
-    appointment_mode: 'custom', 
-    routine_type: 'weekly',    
-    selected_days: [],          
-
-    form: {
-        visit_id: '', 
-        no_bpjs: '', 
-        doctor_id: '', 
-        room_id: '', 
-        disease_id: '',
-        symptoms: '', 
-        patient_status: 'rawat-jalan',
-        drug_allergies: '',
-        food_allergies: '',
-        height_cm: '',
-        weight_kg: '',
-        
-        // Repeater untuk Tanggal Kontrol Beberapa Kali Datang (Acak/Manual)
-        custom_appointments: [
-            { appointment_date: '', notes: '' }
-        ],
-
-        // Parameter Kontrol Rutin otomatis
-        routine_start_date: '',
-        routine_duration: 1, 
-        routine_notes: 'Kontrol Rutin',
-
-        // Repeater untuk Banyak Obat Sekaligus
-        medications: [
-            { medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 }
-        ]
-    },
-
-    initData() {
-        this.fetchPending();
-        fetch('/api/rs/doctors').then(res => res.json()).then(data => this.doctors = data || []);
-        fetch('/api/rs/rooms').then(res => res.json()).then(data => this.rooms = data || []);
-        fetch('/api/rs/diseases').then(res => res.json()).then(data => this.diseases = data || []);
-        fetch('/api/rs/medications').then(res => res.json()).then(data => this.medicationsMaster = data || []);
-        fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
-        
-        // Polling real-time setiap 3 detik
-        setInterval(() => {
-            this.fetchPending();
-            fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
-        }, 3000);
-    },
-
-    fetchPending() {
-        fetch('/api/rs/visits/pending')
-            .then(res => res.json())
-            .then(data => {
-                const incoming = data || [];
-                if (this.pendingVisits.length > 0 && incoming.length > this.pendingVisits.length) {
-                    const diff = incoming.filter(v => !this.pendingVisits.some(p => p.id === v.id));
-                    diff.forEach(v => {
-                        showToast(
-                            "Antrean Pasien Baru",
-                            `Pasien BPJS: ${v.no_bpjs} telah masuk antrean!`,
-                            "success"
-                        );
-                    });
-                }
-                this.pendingVisits = incoming;
-            });
-    },
-
-    openCreateReport(visit) {
-        this.form.visit_id = visit.id;
-        this.form.no_bpjs = visit.no_bpjs;
-        this.form.doctor_id = ''; this.form.room_id = ''; this.form.disease_id = ''; this.form.symptoms = '';
-        this.form.custom_appointments = [{ appointment_date: '', notes: '' }];
-        this.form.medications = [{ medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 }];
-        this.form.routine_start_date = '';
-        this.form.routine_duration = 1;
-        this.selected_days = [];
-        this.appointment_mode = 'custom';
-        
-        if (visit.user && visit.user.health_profile) {
-            this.form.height_cm = visit.user.health_profile.height_cm || '';
-            this.form.weight_kg = visit.user.health_profile.weight_kg || '';
-            this.form.drug_allergies = visit.user.health_profile.drug_allergies || '';
-            this.form.food_allergies = visit.user.health_profile.food_allergies || '';
-        } else {
-            this.form.height_cm = '';
-            this.form.weight_kg = '';
-            this.form.drug_allergies = '';
-            this.form.food_allergies = '';
-        }
-        
-        this.showReportModal = true;
-    },
-
-    addMedicationRow() {
-        this.form.medications.push({ medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 });
-    },
-
-    removeMedicationRow(index) {
-        if (this.form.medications.length > 1) this.form.medications.splice(index, 1);
-    },
-
-    addAppointmentRow() {
-        this.form.custom_appointments.push({ appointment_date: '', notes: '' });
-    },
-
-    removeAppointmentRow(index) {
-        if (this.form.custom_appointments.length > 1) this.form.custom_appointments.splice(index, 1);
-    },
-
-    submitForm() {
-        const payload = {
-            visit_id: this.form.visit_id,
-            no_bpjs: this.form.no_bpjs,
-            doctor_id: this.form.doctor_id,
-            room_id: this.form.room_id,
-            disease_id: this.form.disease_id,
-            symptoms: this.form.symptoms,
-            patient_status: this.form.patient_status,
-            drug_allergies: this.form.drug_allergies,
-            food_allergies: this.form.food_allergies,
-            height_cm: this.form.height_cm,
-            weight_kg: this.form.weight_kg,
-            appointment_mode: this.appointment_mode,
-            routine_type: this.routine_type,
-            selected_days: this.selected_days,
-            routine_start_date: this.form.routine_start_date,
-            routine_duration: parseInt(this.form.routine_duration),
-            routine_notes: this.form.routine_notes,
-            appointments: [], 
-            medications: []
-        };
-
-        if (this.appointment_mode === 'custom') {
-            this.form.custom_appointments.forEach(apt => {
-                if (apt.appointment_date) payload.appointments.push(apt);
-            });
-        }
-
-        this.form.medications.forEach(med => {
-            let master = this.medicationsMaster.find(m => m.id == med.medication_id);
-            if (master && med.rules) {
-                payload.medications.push({
-                    medicine_name: master.name,
-                    rules: med.rules,
-                    remind_at: med.remind_at,
-                    duration_days: parseInt(med.duration_days)
-                });
-            }
-        });
-
-        fetch('/api/rs/medical-records/submit', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': '{{ csrf_token() }}'
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(res => {
-            return res.json().then(data => {
-                if (!res.ok) {
-                    let errorMsg = data.error || data.message || 'Terjadi kesalahan pada server';
-                    if (data.errors) {
-                        errorMsg += '\n' + Object.values(data.errors).flat().join('\n');
-                    }
-                    throw new Error(errorMsg);
-                }
-                return data;
-            });
-        })
-        .then(data => {
-            alert('Data berhasil disimpan dan disinkronisasikan ke Flutter!');
-            this.showReportModal = false;
-            this.initData();
-        })
-        .catch(err => {
-            alert('Gagal: ' + err.message);
-        });
-    }
-}" x-init="initData()" class="space-y-6 p-4">
+<div x-data="visitsPage" x-init="initData()" class="space-y-6 p-4">
 
     <div class="bg-white rounded-xl border shadow-sm overflow-hidden">
         <div class="p-4 bg-gray-50 border-b">
@@ -423,4 +237,191 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('alpine:init', () => {
+        Alpine.data('visitsPage', () => ({
+            pendingVisits: [],
+            historyRecords: [],
+            showReportModal: false,
+            doctors: [], rooms: [], diseases: [], medicationsMaster: [],
+            
+            appointment_mode: 'custom', 
+            routine_type: 'weekly',    
+            selected_days: [],          
+
+            form: {
+                visit_id: '', 
+                no_bpjs: '', 
+                doctor_id: '', 
+                room_id: '', 
+                disease_id: '',
+                symptoms: '', 
+                patient_status: 'rawat-jalan',
+                drug_allergies: '',
+                food_allergies: '',
+                height_cm: '',
+                weight_kg: '',
+                
+                custom_appointments: [
+                    { appointment_date: '', notes: '' }
+                ],
+
+                routine_start_date: '',
+                routine_duration: 1, 
+                routine_notes: 'Kontrol Rutin',
+
+                medications: [
+                    { medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 }
+                ]
+            },
+
+            initData() {
+                this.fetchPending();
+                fetch('/api/rs/doctors').then(res => res.json()).then(data => this.doctors = data || []);
+                fetch('/api/rs/rooms').then(res => res.json()).then(data => this.rooms = data || []);
+                fetch('/api/rs/diseases').then(res => res.json()).then(data => this.diseases = data || []);
+                fetch('/api/rs/medications').then(res => res.json()).then(data => this.medicationsMaster = data || []);
+                fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
+                
+                setInterval(() => {
+                    this.fetchPending();
+                    fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
+                }, 3000);
+            },
+
+            fetchPending() {
+                fetch('/api/rs/visits/pending')
+                    .then(res => res.json())
+                    .then(data => {
+                        const incoming = data || [];
+                        if (this.pendingVisits.length > 0 && incoming.length > this.pendingVisits.length) {
+                            const diff = incoming.filter(v => !this.pendingVisits.some(p => p.id === v.id));
+                            diff.forEach(v => {
+                                showToast(
+                                    'Antrean Pasien Baru',
+                                    `Pasien BPJS: ${v.no_bpjs} telah masuk antrean!`,
+                                    'success'
+                                );
+                            });
+                        }
+                        this.pendingVisits = incoming;
+                    });
+            },
+
+            openCreateReport(visit) {
+                this.form.visit_id = visit.id;
+                this.form.no_bpjs = visit.no_bpjs;
+                this.form.doctor_id = ''; this.form.room_id = ''; this.form.disease_id = ''; this.form.symptoms = '';
+                this.form.custom_appointments = [{ appointment_date: '', notes: '' }];
+                this.form.medications = [{ medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 }];
+                this.form.routine_start_date = '';
+                this.form.routine_duration = 1;
+                this.selected_days = [];
+                this.appointment_mode = 'custom';
+                
+                if (visit.user && visit.user.health_profile) {
+                    this.form.height_cm = visit.user.health_profile.height_cm || '';
+                    this.form.weight_kg = visit.user.health_profile.weight_kg || '';
+                    this.form.drug_allergies = visit.user.health_profile.drug_allergies || '';
+                    this.form.food_allergies = visit.user.health_profile.food_allergies || '';
+                } else {
+                    this.form.height_cm = '';
+                    this.form.weight_kg = '';
+                    this.form.drug_allergies = '';
+                    this.form.food_allergies = '';
+                }
+                
+                this.showReportModal = true;
+            },
+
+            addMedicationRow() {
+                this.form.medications.push({ medication_id: '', rules: '', remind_at: '07:00', duration_days: 5 });
+            },
+
+            removeMedicationRow(index) {
+                if (this.form.medications.length > 1) this.form.medications.splice(index, 1);
+            },
+
+            addAppointmentRow() {
+                this.form.custom_appointments.push({ appointment_date: '', notes: '' });
+            },
+
+            removeAppointmentRow(index) {
+                if (this.form.custom_appointments.length > 1) this.form.custom_appointments.splice(index, 1);
+            },
+
+            submitForm() {
+                const payload = {
+                    visit_id: this.form.visit_id,
+                    no_bpjs: this.form.no_bpjs,
+                    doctor_id: this.form.doctor_id,
+                    room_id: this.form.room_id,
+                    disease_id: this.form.disease_id,
+                    symptoms: this.form.symptoms,
+                    patient_status: this.form.patient_status,
+                    drug_allergies: this.form.drug_allergies,
+                    food_allergies: this.form.food_allergies,
+                    height_cm: this.form.height_cm,
+                    weight_kg: this.form.weight_kg,
+                    appointment_mode: this.appointment_mode,
+                    routine_type: this.routine_type,
+                    selected_days: this.selected_days,
+                    routine_start_date: this.form.routine_start_date,
+                    routine_duration: parseInt(this.form.routine_duration),
+                    routine_notes: this.form.routine_notes,
+                    appointments: [], 
+                    medications: []
+                };
+
+                if (this.appointment_mode === 'custom') {
+                    this.form.custom_appointments.forEach(apt => {
+                        if (apt.appointment_date) payload.appointments.push(apt);
+                    });
+                }
+
+                this.form.medications.forEach(med => {
+                    let master = this.medicationsMaster.find(m => m.id == med.medication_id);
+                    if (master && med.rules) {
+                        payload.medications.push({
+                            medicine_name: master.name,
+                            rules: med.rules,
+                            remind_at: med.remind_at,
+                            duration_days: parseInt(med.duration_days)
+                        });
+                    }
+                });
+
+                fetch('/api/rs/medical-records/submit', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                    },
+                    body: JSON.stringify(payload)
+                })
+                .then(res => {
+                    return res.json().then(data => {
+                        if (!res.ok) {
+                            let errorMsg = data.error || data.message || 'Terjadi kesalahan pada server';
+                            if (data.errors) {
+                                errorMsg += '\n' + Object.values(data.errors).flat().join('\n');
+                            }
+                            throw new Error(errorMsg);
+                        }
+                        return data;
+                    });
+                })
+                .then(data => {
+                    alert('Data berhasil disimpan dan disinkronisasikan ke Flutter!');
+                    this.showReportModal = false;
+                    this.initData();
+                })
+                .catch(err => {
+                    alert('Gagal: ' + err.message);
+                });
+            }
+        }));
+    });
+</script>
 @endsection
