@@ -104,6 +104,69 @@
         </div>
     </div>
 
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-20 right-6 z-50 flex flex-col gap-3 pointer-events-none w-80"></div>
+    <script>
+        function showToast(title, message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+
+            const toast = document.createElement('div');
+            toast.className = `p-4 rounded-xl shadow-lg border flex items-start gap-3 transition-all duration-300 transform translate-x-80 opacity-0 pointer-events-auto bg-white`;
+            
+            let iconClass = 'fa-info-circle text-blue-500';
+            let borderClass = 'border-blue-100';
+            if (type === 'success') {
+                iconClass = 'fa-circle-check text-green-500';
+                borderClass = 'border-green-100';
+            } else if (type === 'warning') {
+                iconClass = 'fa-triangle-exclamation text-amber-500';
+                borderClass = 'border-amber-100';
+            }
+
+            toast.innerHTML = `
+                <div class="shrink-0 mt-0.5"><i class="fa-solid ${iconClass} text-lg"></i></div>
+                <div class="flex-1 min-w-0">
+                    <p class="text-xs font-bold text-gray-900">${title}</p>
+                    <p class="text-[11px] text-gray-500 mt-0.5">${message}</p>
+                </div>
+                <button class="shrink-0 text-gray-400 hover:text-gray-600 text-xs font-bold" onclick="this.parentElement.remove()">&times;</button>
+            `;
+            toast.classList.add(borderClass);
+
+            container.appendChild(toast);
+
+            // Play a soft notification sound
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+                osc.frequency.setValueAtTime(880, audioCtx.currentTime + 0.1); // A5
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.35);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.35);
+            } catch (e) {
+                console.log('Audio feedback not supported or blocked by browser policies');
+            }
+
+            // Slide-in animation
+            setTimeout(() => {
+                toast.classList.remove('translate-x-80', 'opacity-0');
+            }, 10);
+
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-x-80', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 5000);
+        }
+    </script>
+
     <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
     <script>
         AOS.init({ duration: 600, once: true });

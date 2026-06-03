@@ -76,7 +76,7 @@
                         </template>
                         <template x-for="p in todayPatients" :key="p.id">
                             <tr class="hover:bg-gray-50/50 transition">
-                                <td class="p-3 font-mono font-bold text-blue-600" x-text="'#' + (p.id || p.id_visit || '-')"></td>
+                                <td class="p-3 font-mono font-bold text-blue-600" x-text="'#' + (p.queue_number || p.id || p.id_visit || '-')"></td>
                                 <td class="p-3 font-mono" x-text="p.no_bpjs || '-'"></td>
                                 <td class="p-3 font-semibold text-gray-900" x-text="p.user?.username || p.patient_name || 'Pasien Umum'"></td>
                                 <td class="p-3">

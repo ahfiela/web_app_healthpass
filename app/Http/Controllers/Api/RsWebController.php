@@ -100,23 +100,30 @@ class RsWebController extends Controller
     // 3. MASTER DATA CRUD: PENYAKIT (ICD-10 Umum)
     // ==========================================
     public function diseaseIndex() { 
-        return response()->json(Disease::all()); 
+        return response()->json(Disease::whereNull('kode_rs')->orWhere('kode_rs', $this->getKodeRs())->get()); 
     }
     
     public function diseaseStore(Request $request) {
+        $kodeRs = $this->getKodeRs();
         $data = $request->validate([
-            'icd_code' => 'required|unique:diseases,icd_code', 
+            'icd_code' => ['required', Rule::unique('diseases', 'icd_code')->where(function($q) use ($kodeRs) {
+                $q->where('kode_rs', $kodeRs);
+            })], 
             'name' => 'required', 
             'description' => 'nullable',
             'is_critical' => 'nullable|boolean'
         ]);
+        $data['kode_rs'] = $kodeRs;
         return response()->json(Disease::create($data), 201);
     }
 
     public function diseaseUpdate(Request $request, $id) {
-        $disease = Disease::findOrFail($id);
+        $kodeRs = $this->getKodeRs();
+        $disease = Disease::where('id', $id)->where('kode_rs', $kodeRs)->firstOrFail();
         $data = $request->validate([
-            'icd_code' => 'required|unique:diseases,icd_code,' . $id, 
+            'icd_code' => ['required', Rule::unique('diseases', 'icd_code')->where(function($q) use ($kodeRs) {
+                $q->where('kode_rs', $kodeRs);
+            })->ignore($id)], 
             'name' => 'required',
             'description' => 'nullable',
             'is_critical' => 'nullable|boolean'
@@ -126,7 +133,7 @@ class RsWebController extends Controller
     }
 
     public function diseaseDestroy($id) {
-        Disease::findOrFail($id)->delete();
+        Disease::where('id', $id)->where('kode_rs', $this->getKodeRs())->firstOrFail()->delete();
         return response()->json(['message' => 'Penyakit berhasil dihapus']);
     }
 
@@ -171,8 +178,14 @@ class RsWebController extends Controller
     // ==========================================
     public function getStats() {
         $kodeRs = $this->getKodeRs();
+        $totalPasien = User::whereIn('no_bpjs', function($q) use ($kodeRs) {
+            $q->select('no_bpjs')
+              ->from('visits')
+              ->where('kode_rs', $kodeRs);
+        })->count();
+
         return response()->json([
-            'total_pasien' => User::count(),
+            'total_pasien' => $totalPasien,
             'kunjungan_hari_ini' => Visit::where('kode_rs', $kodeRs)->where('visit_date', now()->toDateString())->count(),
             // Menghitung edit request berdasarkan rekam medis -> kunjungan RS yang login
             'pending_edits' => MedicalRecordEdit::whereHas('medicalRecord.visit', function($q) use ($kodeRs) {
@@ -186,7 +199,7 @@ class RsWebController extends Controller
     // ==========================================
     public function getPendingVisits() {
         return response()->json(
-            Visit::with('user')
+            Visit::with('user.healthProfile')
                 ->where('kode_rs', $this->getKodeRs())
                 ->whereIn('status', ['pending', 'approved']) 
                 ->whereDate('visit_date', \Carbon\Carbon::today())
@@ -221,6 +234,10 @@ class RsWebController extends Controller
             'disease_id'     => 'required',
             'symptoms'       => 'required|string',
             'patient_status' => 'required|string',
+            'height_cm'      => 'nullable|numeric',
+            'weight_kg'      => 'nullable|numeric',
+            'drug_allergies' => 'nullable|string',
+            'food_allergies' => 'nullable|string',
         ]);
 
         DB::beginTransaction();
@@ -249,6 +266,8 @@ class RsWebController extends Controller
             );
             if ($request->filled('drug_allergies')) { $healthProfile->drug_allergies = $request->drug_allergies; }
             if ($request->filled('food_allergies')) { $healthProfile->food_allergies = $request->food_allergies; }
+            if ($request->filled('height_cm')) { $healthProfile->height_cm = $request->height_cm; }
+            if ($request->filled('weight_kg')) { $healthProfile->weight_kg = $request->weight_kg; }
             $healthProfile->health_status = $request->patient_status === 'rawat-inap' ? 'darurat' : ($request->patient_status === 'rawat-jalan' ? 'perlu_pemantauan' : 'sehat');
             $healthProfile->save();
 
@@ -268,8 +287,8 @@ class RsWebController extends Controller
             if ($request->appointment_mode === 'custom' && $request->has('appointments')) {
                 foreach ($request->appointments as $apt) {
                     if (!empty($apt['appointment_date'])) {
-                        // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments
                         Appointment::create([
+                            'visit_id'         => $visit->id,
                             'no_bpjs'          => $request->no_bpjs,
                             'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
                             'appointment_date' => $apt['appointment_date'],
@@ -298,8 +317,8 @@ class RsWebController extends Controller
 
                 for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
                     if (in_array($date->format('l'), $daysFilter)) {
-                        // 🟢 Menyertakan kode_rs dan rs_name ke tabel appointments rutin
                         Appointment::create([
+                            'visit_id'         => $visit->id,
                             'no_bpjs'          => $request->no_bpjs,
                             'rs_name'          => $visit->rs_name ?? $this->getNamaRs(),
                             'appointment_date' => $date->toDateString(),
@@ -318,6 +337,7 @@ class RsWebController extends Controller
                         $allEnglishDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
                         MedicationSchedule::create([
+                            'visit_id'      => $visit->id,
                             'no_bpjs'       => $request->no_bpjs,
                             'medicine_name' => $med['medicine_name'],
                             'rules'         => $med['rules'],
@@ -339,9 +359,13 @@ class RsWebController extends Controller
     }
 
     public function requestEditReport(Request $request, $id) {
+        $medicalRecord = MedicalRecord::where('id', $id)
+            ->where('kode_rs', $this->getKodeRs())
+            ->firstOrFail();
+
         $request->validate(['proposed_changes' => 'required|array']);
         MedicalRecordEdit::create([
-            'medical_record_id' => $id,
+            'medical_record_id' => $medicalRecord->id,
             'proposed_changes' => $request->proposed_changes,
             'status' => 'pending'
         ]);
@@ -349,7 +373,16 @@ class RsWebController extends Controller
     }
 
     public function getAllPatientsUntukWeb() {
-        return response()->json(User::orderBy('created_at', 'desc')->get());
+        $kodeRs = $this->getKodeRs();
+        $patients = User::whereIn('no_bpjs', function($q) use ($kodeRs) {
+            $q->select('no_bpjs')
+              ->from('visits')
+              ->where('kode_rs', $kodeRs);
+        })
+        ->orderBy('created_at', 'desc')
+        ->get();
+        
+        return response()->json($patients);
     }
 
     public function getHistoryUntukWeb() { 

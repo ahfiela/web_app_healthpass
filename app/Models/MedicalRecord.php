@@ -14,4 +14,12 @@ class MedicalRecord extends Model {
     public function user() { 
         return $this->belongsTo(User::class, 'no_bpjs', 'no_bpjs'); 
     }
+
+    public function appointments() {
+        return $this->hasMany(Appointment::class, 'visit_id', 'visit_id');
+    }
+
+    public function medicationSchedules() {
+        return $this->hasMany(MedicationSchedule::class, 'visit_id', 'visit_id');
+    }
 }

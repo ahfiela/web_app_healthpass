@@ -59,12 +59,18 @@ class FlutterController extends Controller
         $namaRsResmi = $hospital ? $hospital->nama_rs : $namaRsCadangan;
 
         try {
+            $today = now()->toDateString();
+            $queueNumber = Visit::where('kode_rs', $request->kode_rs)
+                ->where('visit_date', $today)
+                ->count() + 1;
+
             $visit = Visit::create([
-                'no_bpjs'    => $user->no_bpjs,     
-                'kode_rs'    => $request->kode_rs,  
-                'rs_name'    => $namaRsResmi, 
-                'visit_date' => now()->toDateString(),
-                'status'     => 'pending',
+                'no_bpjs'      => $user->no_bpjs,     
+                'kode_rs'      => $request->kode_rs,  
+                'rs_name'      => $namaRsResmi, 
+                'visit_date'   => $today,
+                'status'       => 'pending',
+                'queue_number' => $queueNumber,
             ]);
 
             return response()->json([
@@ -129,7 +135,7 @@ class FlutterController extends Controller
             ?? $medications->sortBy('remind_at')->first();
 
         // 5. Riwayat rekam medis lengkap pasien
-        $history = MedicalRecord::with(['doctor', 'room', 'disease'])
+        $history = MedicalRecord::with(['doctor', 'room', 'disease', 'visit', 'appointments', 'medicationSchedules'])
             ->where('no_bpjs', $noBpjs)
             ->orderByDesc('created_at')
             ->get();
@@ -173,6 +179,7 @@ class FlutterController extends Controller
                     'rules'         => $nextMedication->rules,
                     'remind_at'     => $nextMedication->remind_at,
                 ] : null,
+                'today_medications'     => $medications,
                 'medical_history'       => $history,
                 'health_passport'       => $passport
             ]
@@ -275,6 +282,7 @@ class FlutterController extends Controller
     {
         // Mengambil data user yang sedang login berdasarkan token Sanctum
         $user = $request->user();
+        $healthProfile = HealthProfile::where('no_bpjs', $user->no_bpjs)->first();
 
         return response()->json([
             'name' => $user->username,
@@ -282,6 +290,8 @@ class FlutterController extends Controller
             'email' => $user->email,
             'born' => $user->born,
             'gender' => $user->gender,
+            'emergency_contact_name' => $healthProfile?->emergency_contact_name ?? '',
+            'emergency_contact_phone' => $healthProfile?->emergency_contact_phone ?? '',
         ], 200);
     }
 

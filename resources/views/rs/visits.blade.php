@@ -22,6 +22,8 @@
         patient_status: 'rawat-jalan',
         drug_allergies: '',
         food_allergies: '',
+        height_cm: '',
+        weight_kg: '',
         
         // Repeater untuk Tanggal Kontrol Beberapa Kali Datang (Acak/Manual)
         custom_appointments: [
@@ -40,12 +42,37 @@
     },
 
     initData() {
-        fetch('/api/rs/visits/pending').then(res => res.json()).then(data => this.pendingVisits = data || []);
+        this.fetchPending();
         fetch('/api/rs/doctors').then(res => res.json()).then(data => this.doctors = data || []);
         fetch('/api/rs/rooms').then(res => res.json()).then(data => this.rooms = data || []);
         fetch('/api/rs/diseases').then(res => res.json()).then(data => this.diseases = data || []);
         fetch('/api/rs/medications').then(res => res.json()).then(data => this.medicationsMaster = data || []);
         fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
+        
+        // Polling real-time setiap 3 detik
+        setInterval(() => {
+            this.fetchPending();
+            fetch('/api/rs/medical-records/history').then(res => res.json()).then(data => this.historyRecords = data || []);
+        }, 3000);
+    },
+
+    fetchPending() {
+        fetch('/api/rs/visits/pending')
+            .then(res => res.json())
+            .then(data => {
+                const incoming = data || [];
+                if (this.pendingVisits.length > 0 && incoming.length > this.pendingVisits.length) {
+                    const diff = incoming.filter(v => !this.pendingVisits.some(p => p.id === v.id));
+                    diff.forEach(v => {
+                        showToast(
+                            "Antrean Pasien Baru",
+                            `Pasien BPJS: ${v.no_bpjs} telah masuk antrean!`,
+                            "success"
+                        );
+                    });
+                }
+                this.pendingVisits = incoming;
+            });
     },
 
     openCreateReport(visit) {
@@ -58,6 +85,19 @@
         this.form.routine_duration = 1;
         this.selected_days = [];
         this.appointment_mode = 'custom';
+        
+        if (visit.user && visit.user.health_profile) {
+            this.form.height_cm = visit.user.health_profile.height_cm || '';
+            this.form.weight_kg = visit.user.health_profile.weight_kg || '';
+            this.form.drug_allergies = visit.user.health_profile.drug_allergies || '';
+            this.form.food_allergies = visit.user.health_profile.food_allergies || '';
+        } else {
+            this.form.height_cm = '';
+            this.form.weight_kg = '';
+            this.form.drug_allergies = '';
+            this.form.food_allergies = '';
+        }
+        
         this.showReportModal = true;
     },
 
@@ -88,6 +128,8 @@
             patient_status: this.form.patient_status,
             drug_allergies: this.form.drug_allergies,
             food_allergies: this.form.food_allergies,
+            height_cm: this.form.height_cm,
+            weight_kg: this.form.weight_kg,
             appointment_mode: this.appointment_mode,
             routine_type: this.routine_type,
             selected_days: this.selected_days,
@@ -164,7 +206,7 @@
                 <tbody>
                     <template x-for="visit in pendingVisits" :key="visit.id">
                         <tr class="border-b hover:bg-gray-50/50">
-                            <td class="p-3 font-bold text-blue-600" x-text="'#'+visit.id"></td>
+                            <td class="p-3 font-bold text-blue-600" x-text="'#'+(visit.queue_number || visit.id)"></td>
                             <td class="p-3 font-mono text-xs" x-text="visit.no_bpjs"></td>
                             <td class="p-3">
                                 <span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase"
@@ -213,6 +255,28 @@
                 <div>
                     <label class="block font-bold text-gray-700 mb-1">Gejala Klinis *</label>
                     <textarea x-model="form.symptoms" required class="w-full border rounded-lg p-2 text-xs" rows="2" placeholder="Keluhan pasien..."></textarea>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">Tinggi Badan (cm)</label>
+                        <input type="number" step="0.1" x-model="form.height_cm" class="w-full border rounded-lg p-2 text-xs" placeholder="Contoh: 170">
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">Berat Badan (kg)</label>
+                        <input type="number" step="0.1" x-model="form.weight_kg" class="w-full border rounded-lg p-2 text-xs" placeholder="Contoh: 60">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">Alergi Obat</label>
+                        <textarea x-model="form.drug_allergies" class="w-full border rounded-lg p-2 text-xs" rows="2" placeholder="Sebutkan alergi obat jika ada..."></textarea>
+                    </div>
+                    <div>
+                        <label class="block font-bold text-gray-700 mb-1">Alergi Makanan</label>
+                        <textarea x-model="form.food_allergies" class="w-full border rounded-lg p-2 text-xs" rows="2" placeholder="Sebutkan alergi makanan jika ada..."></textarea>
+                    </div>
                 </div>
 
                 <div class="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100 space-y-3">
