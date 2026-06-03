@@ -1,13 +1,7 @@
 <?php
 
-// 1. Alihkan folder storage dan cache ke /tmp agar tidak Error 500 di Vercel
-$storagePath = '/tmp/storage/bootstrap/cache';
-if (!is_dir($storagePath)) {
-    mkdir($storagePath, 0755, true);
-}
+// Mengalihkan folder kompilasi view secara aman ke direktori tmp Vercel
+putenv('VIEW_COMPILED_PATH=/tmp');
 
-putenv("APP_STORAGE=/tmp");
-putenv("VIEW_COMPILED_PATH=/tmp/storage/bootstrap/cache");
-
-// 2. Hubungkan kembali ke file utama Laravel Anda
+// Memanggil file inisialisasi utama Laravel
 require __DIR__ . '/../public/index.php';
