@@ -6,17 +6,21 @@ use App\Http\Controllers\HospitalAuthController;
 use App\Http\Controllers\Api\RsWebController;
 
 Route::get('/', function () {
-    return view('welcome');
+    return redirect()->route('hospital.login');
 });
 
-// Portal Khusus Web Instansi Luar (QR Generator)
+Route::get('/login', function () {
+    return redirect()->route('hospital.login');
+})->name('login');
+
 Route::prefix('instansi')->group(function () {
     Route::get('/qr-generator', [InstansiQrController::class, 'index']);
     Route::post('/qr-generator', [InstansiQrController::class, 'generate']);
 });
 
+
 // ========================================================
-// JALUR AUTHENTICATION TENANT RS (GUEST ACCESS)
+// AUTHENTICATION TENANT RS (GUEST ACCESS)
 // ========================================================
 Route::middleware('guest:hospital')->group(function () {
     Route::get('/rs/login', [HospitalAuthController::class, 'showLogin'])->name('hospital.login');
@@ -25,11 +29,11 @@ Route::middleware('guest:hospital')->group(function () {
     Route::post('/rs/register', [HospitalAuthController::class, 'register'])->name('hospital.register.post');
 });
 
-// ========================================================
-// AREA INTERN DASHBOARD RS (WAJIB LOGIN MULTI-TENANT)
-// ========================================================
+// =========================
+// AREA INTERN DASHBOARD RS
+// =========================
 Route::middleware('auth:hospital')->group(function () {
-    // 1. Tampilan Halaman Tampilan Blade
+    // 1. Halaman Tampilan Blade
     Route::get('/rs/dashboard', function () { return view('rs.dashboard'); })->name('rs.dashboard');
     Route::get('/rs/visits', function () { return view('rs.visits'); });
     Route::get('/rs/report', function () { return view('rs.report'); });
@@ -42,7 +46,7 @@ Route::middleware('auth:hospital')->group(function () {
     // Aksi Logout
     Route::post('/rs/logout', [HospitalAuthController::class, 'logout'])->name('hospital.logout');
 
-    // 2. Jalur API Internal Dashboard (Sudah disatukan ke Session Web)
+    // 2. Jalur API Internal Dashboard
     Route::prefix('api/rs')->group(function () {
         Route::get('/dashboard/stats', [RsWebController::class, 'getStats']);
         Route::get('/patients/all', [RsWebController::class, 'getAllPatientsUntukWeb']);
@@ -51,8 +55,6 @@ Route::middleware('auth:hospital')->group(function () {
         Route::get('/visits/today', [RsWebController::class, 'getTodayVisits']);
         Route::post('/visits/{id}/validate', [RsWebController::class, 'validateVisit']);
         
-        // 🟢 FIX NAMA METHOD: Diubah dari submitMedicalRecord menjadi submitLaporanMedis agar sesuai dengan isi RsWebController.php
-        // Pastikan namanya submitMedicalRecord, bukan submitLaporanMedis
 Route::post('/medical-records/submit', [RsWebController::class, 'submitMedicalRecord']);
 
         // Master Dokter
