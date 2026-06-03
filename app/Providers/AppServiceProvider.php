@@ -14,7 +14,6 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot()
 {
-    // Tambahkan baris kode ini untuk memotong jalur penulisan folder lokal ke folder sementara Vercel
     if (config('app.env') === 'production') {
         $paths = [
             '/tmp/framework/sessions',
